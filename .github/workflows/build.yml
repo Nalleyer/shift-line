@@ -248,19 +248,36 @@ jobs:
       - name: Build HTML5 package with love.js (compatibility mode)
         run: |
           npx --yes love.js -c -t "${GAME_NAME}" -m 67108864 build/shift-line-web.love build/web-out
-          # Clean dark background and crisp pixel scaling for itch.io iframe
+          rm -f build/web-out/theme/bg.png
+          # Clean dark background, remove love.js chrome, and scale 4:3 canvas cleanly in fullscreen
           cat >> build/web-out/theme/love.css << 'EOF'
 
           html, body {
+            width: 100%;
+            height: 100%;
             background-color: #0B0E14 !important;
+            background-image: none !important;
             margin: 0;
             padding: 0;
             overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
           }
-          h1, footer {
+          h1, footer, br {
             display: none !important;
           }
+          center {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
           #canvas, #loadingCanvas {
+            width: min(100vw, calc(100vh * 4 / 3)) !important;
+            height: min(100vh, calc(100vw * 3 / 4)) !important;
+            border: 0 !important;
             image-rendering: pixelated;
             image-rendering: crisp-edges;
           }
