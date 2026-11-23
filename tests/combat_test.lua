@@ -136,11 +136,17 @@ assert_eq(inter_b.core_damage, 2, 'W intercepts first breach (col 1), second bre
 assert_true(inter_b.line[1] ~= nil, 'W shifted to col 1 during intercept')
 assert_eq(inter_b.line[1].hp, 7, 'W takes max(0, 2 - (1 def + 2 intercept_def)) = 0 dmg from r')
 
--- When two W units exist, the nearest one intercepts
+-- When two W units exist, the nearest one intercepts without dragging other allies
 local inter_near = Battle.new({ [2] = make_unit('W'), [5] = make_unit('W') }, '.....g', 0, 8)
 Battle.step(inter_near)
-assert_true(inter_near.line[6] ~= nil and inter_near.line[3] ~= nil and inter_near.line[2] == nil,
-  'nearest W (slot 5, dist 1) intercepts col 6 breach while slot 2 shifts alongside by +1 to col 3')
+assert_true(inter_near.line[6] ~= nil and inter_near.line[2] ~= nil and inter_near.line[5] == nil,
+  'nearest W (slot 5, dist 1) moves to col 6 to intercept while slot 2 stays in place')
+
+-- Two W units can each intercept once per round
+local inter_two = Battle.new({ [2] = make_unit('W'), [5] = make_unit('W') }, 'g....g', 0, 8)
+Battle.step(inter_two)
+assert_eq(inter_two.core_damage, 0, 'two W units each intercept one breach in the same round')
+assert_true(inter_two.line[1] ~= nil and inter_two.line[6] ~= nil, 'both W units moved to intercepting lanes')
 
 -- Interceptor does NOT fire if Barricade ('compensation') blocks the breach
 local inter_comp = Battle.new({ [4] = make_unit('W') }, 'g.....', 0, 8, { relics = { 'compensation' } })

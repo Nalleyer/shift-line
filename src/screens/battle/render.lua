@@ -414,18 +414,25 @@ local function draw_player_row(battle, mouse)
           Ui.tooltip.register(
             { x = T.col_x(i), y = T.PLAYER_Y, w = T.PANEL_W, h = T.PANEL_H },
             I18n.t('trait.taunt.name'),
-            I18n.t('battle.taunt_cover', taunted)
+            I18n.t('battle.taunt_cover', taunted),
+            { icon = 'taunt', icon_color = C.blue, color = C.blue }
           )
         end
       elseif incoming > 0 then
         local pulse = 0.55 + 0.45 * math.sin(battle.t * 5 + i)
         draw_breach_marker(T.col_x(i), cx, incoming, pulse)
         if not battle.modal and not battle.paused and battle.phase ~= 'playback' and battle.phase ~= 'intro' then
-          local key = battle.state.compensation_available and 'battle.empty_breach_redirect_tip' or 'battle.empty_breach_tip'
+          local redirected = battle.state.compensation_available
+          local key = redirected and 'battle.empty_breach_redirect_tip' or 'battle.empty_breach_tip'
           Ui.tooltip.register(
             { x = T.col_x(i), y = T.PLAYER_Y, w = T.PANEL_W, h = T.PANEL_H },
             I18n.t('battle.to_core'),
-            I18n.t(key, incoming)
+            I18n.t(key, incoming),
+            {
+              icon = redirected and 'compensation' or 'heart',
+              icon_color = redirected and C.blue or C.red,
+              color = redirected and C.blue or C.red,
+            }
           )
         end
       end
@@ -499,9 +506,17 @@ local function draw_buttons(battle, mouse)
         sub_icon = 'charge',
       })
       if hovered == 'charge_left' then
-        Ui.tooltip.register(rects.charge_left, I18n.t('battle.charge_shift'), I18n.t('ui.charge') .. ' -1')
+        Ui.tooltip.register(rects.charge_left, I18n.t('battle.charge_shift'), I18n.t('battle.charge_shift_tip'), {
+          icon = 'charge',
+          icon_color = C.blue,
+          color = C.blue,
+        })
       elseif hovered == 'charge_right' then
-        Ui.tooltip.register(rects.charge_right, I18n.t('battle.charge_shift'), I18n.t('ui.charge') .. ' -1')
+        Ui.tooltip.register(rects.charge_right, I18n.t('battle.charge_shift'), I18n.t('battle.charge_shift_tip'), {
+          icon = 'charge',
+          icon_color = C.blue,
+          color = C.blue,
+        })
       end
     end
     Ui.button(rects.fight.x, by, rects.fight.w, bh, I18n.t('battle.continue'), {

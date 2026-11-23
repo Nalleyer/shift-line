@@ -90,7 +90,11 @@ function Tooltip.trait_icons(unit, x, y, opts)
       opts = opts,
       trait = trait.id,
     }
-    Tooltip.register(rect, I18n.t('trait.' .. trait.id .. '.name'), Tooltip.trait_detail(unit, trait, opts), { trait = trait })
+    Tooltip.register(rect, I18n.t('trait.' .. trait.id .. '.name'), Tooltip.trait_detail(unit, trait, opts), {
+      trait = trait,
+      icon = trait.icon,
+      icon_color = C.amber,
+    })
   end
 end
 
@@ -114,13 +118,25 @@ local function draw_battle_dock(generic, tip)
 
   if generic then
     local unit = generic.opts.unit
-    Text.fit_text(generic.title or '', tx, ty, tw, { color = C.amber })
+    local icon = generic.opts.icon
+    local title_x = icon and (tx + 11) or tx
+    local title_w = icon and (tw - 11) or tw
+    local title_col = generic.opts.color or C.amber
+    if icon then
+      Draw.icon(icon, tx + 4, ty + (Assets.cjk and 5 or 3), 1, generic.opts.icon_color or title_col)
+    end
+    Text.fit_text(generic.title or '', title_x, ty, title_w, { color = title_col })
     ty = ty + Assets.line_h
     if unit then
-      local stats = I18n.t('ui.health_full') .. ' ' .. unit.hp .. '/' .. (unit.max or Unit.max_hp(unit))
-        .. '  ' .. I18n.t('ui.attack_full') .. ' ' .. Tooltip.live_atk(unit, generic.opts)
-        .. '  ' .. I18n.t('ui.defense_full') .. ' ' .. Unit.defense(unit)
-      Text.fit_text(stats, tx, ty, tw, { color = C.paper })
+      local hp_str = unit.hp .. '/' .. (unit.max or Unit.max_hp(unit))
+      local atk_str = tostring(Tooltip.live_atk(unit, generic.opts))
+      local def_str = tostring(Unit.defense(unit))
+      local sx = tx
+      Draw.icon_text('heart', hp_str, sx, ty, { color = C.paper, icon_color = C.red, bitmap = true })
+      sx = sx + 10 + Text.width(hp_str, 1, true) + 10
+      Draw.icon_text('attack', atk_str, sx, ty, { color = C.paper, icon_color = C.amber, bitmap = true })
+      sx = sx + 10 + Text.width(atk_str, 1, true) + 10
+      Draw.icon_text('defense', def_str, sx, ty, { color = C.paper, icon_color = C.blue, bitmap = true })
       ty = ty + Assets.line_h
     end
     local bodies = type(generic.body) == 'table' and generic.body or { generic.body or '' }
@@ -130,7 +146,12 @@ local function draw_battle_dock(generic, tip)
     local kind = (tip.kind == 'active' and I18n.t('ui.consumable') or I18n.t('ui.passive'))
       .. ' / ' .. I18n.t('shop.rarity_' .. tip.rarity)
     local has_hint = tip.kind == 'active'
-    Text.fit_text(tip.name .. '  ' .. kind, tx, ty, tw, { color = Draw.rarity_color(tip.rarity) })
+    local title_x = tip.definition and (tx + 11) or tx
+    local title_w = tip.definition and (tw - 11) or tw
+    if tip.definition then
+      Draw.equipment_icon(tip.definition, tx + 4, ty + (Assets.cjk and 5 or 3), 1, 1)
+    end
+    Text.fit_text(tip.name .. '  ' .. kind, title_x, ty, title_w, { color = Draw.rarity_color(tip.rarity) })
     local next_y = Text.wrap_text(tip.description, tx, ty + Assets.line_h, tw, {
       color = C.paper,
       max_lines = has_hint and 2 or 3,
@@ -166,7 +187,12 @@ local function draw_floating_generic(generic)
 
   Draw.rect(x + 2, y + 2, width, height, C.ink, 0.8)
   Draw.panel(x, y, width, height, { border = opts.color or C.amber, fill = C.panel })
-  Text.fit_text(generic.title or '', x + 8, y + 5, width - 16, { color = opts.color or C.amber })
+  local title_x = opts.icon and (x + 19) or (x + 8)
+  local title_w = opts.icon and (width - 27) or (width - 16)
+  if opts.icon then
+    Draw.icon(opts.icon, x + 12, y + 5 + (Assets.cjk and 5 or 3), 1, opts.icon_color or opts.color or C.amber)
+  end
+  Text.fit_text(generic.title or '', title_x, y + 5, title_w, { color = opts.color or C.amber })
   for i, line in ipairs(lines) do
     Text.text(line, x + 8, y + 5 + i * Assets.line_h, { color = C.paper })
   end
@@ -189,7 +215,12 @@ local function draw_floating_loadout(tip)
 
   Draw.rect(x + 3, y + 3, width, height, C.ink, 0.8)
   Draw.panel(x, y, width, height, { border = Draw.rarity_color(tip.rarity), fill = C.panel })
-  Text.fit_text(tip.name, x + 8, title_y, width - 16, { color = Draw.rarity_color(tip.rarity) })
+  local title_x = tip.definition and (x + 19) or (x + 8)
+  local title_w = tip.definition and (width - 27) or (width - 16)
+  if tip.definition then
+    Draw.equipment_icon(tip.definition, x + 12, title_y + (Assets.cjk and 5 or 3), 1, 1)
+  end
+  Text.fit_text(tip.name, title_x, title_y, title_w, { color = Draw.rarity_color(tip.rarity) })
   Text.text(kind, x + 8, kind_y, { color = C.dim })
   Text.wrap_text(tip.description, x + 8, desc_y, width - 16, { color = C.paper, max_lines = 7 })
   if has_hint then

@@ -425,13 +425,14 @@ local function snapshot_player_defenses(s, occupied, guards)
   end
 end
 
-local function try_intercept(s, col, amount, state, occupied, guards)
-  if state.intercepted or not col or amount <= 0 or s.compensation_available then
+local function try_intercept(s, col, amount, used_interceptors, occupied, guards)
+  if not col or amount <= 0 or s.compensation_available then
     return false
   end
   local best, delta
   for i = 1, Constants.SLOTS do
-    if s.line[i] and Unit.trait(s.line[i], 'intercept') then
+    local u = s.line[i]
+    if u and not used_interceptors[u] and Unit.trait(u, 'intercept') then
       local d = (col - i) % Constants.SLOTS
       if d >= 3 then
         d = d - Constants.SLOTS
@@ -445,8 +446,8 @@ local function try_intercept(s, col, amount, state, occupied, guards)
     return false
   end
 
-  state.intercepted = true
   local interceptor = s.line[best]
+  used_interceptors[interceptor] = true
   local itrait = interceptor and Unit.trait(interceptor, 'intercept')
   if itrait and itrait.def_bonus then
     interceptor.combat_def = (interceptor.combat_def or 0) + itrait.def_bonus
@@ -454,7 +455,8 @@ local function try_intercept(s, col, amount, state, occupied, guards)
 
   emit(s, { type = 'action', kind = 'intercept', side = 'player', from = best, targets = { col }, n = s.round_no })
   if delta ~= 0 then
-    s.line = Util.shift_line(s.line, delta)
+    s.line[col] = interceptor
+    s.line[best] = nil
     s.shifted_this_round = true
     emit_reposition(s, 'INTERCEPT', delta)
   end
@@ -468,7 +470,7 @@ local function resolve_enemy_phase(s)
   -- Capture lane occupancy and guard strength once before retaliation resolves.
   local occupied, guards = {}, {}
   snapshot_player_defenses(s, occupied, guards)
-  local intercept_state = { intercepted = false }
+  local used_interceptors = {}
 
   for i = 1, Constants.SLOTS do
     local enemy = s.enemies[i]
@@ -479,7 +481,7 @@ local function resolve_enemy_phase(s)
         emit(s, { type = 'action', kind = 'taunt', side = 'player', from = target, targets = { i }, n = s.round_no })
       end
 
-      if not target and not occupied[i] and try_intercept(s, i, enemy.brk or 0, intercept_state, occupied, guards) then
+      if not target and not occupied[i] and try_intercept(s, i, enemy.brk or 0, used_interceptors, occupied, guards) then
         target = i
       end
 

@@ -121,7 +121,11 @@ local function draw_header_bar(run, text_y, mouse)
   Ui.frame(fuse_rect.x, fuse_rect.y, fuse_rect.w, fuse_rect.h, fuse_on and C.green or C.line)
   Ui.icon('insurance', fuse_rect.x + 6, fuse_rect.y + fuse_rect.h / 2, 1, fcol)
   Text.fit_text(tr(fuse_on and 'fuse_ready' or 'fuse_spent'), fuse_rect.x + 12, text_y, fuse_rect.w - 14, { color = fcol })
-  Ui.tooltip.register(fuse_rect, tr('fuse_tip_title'), tr(fuse_on and 'fuse_tip_ready' or 'fuse_tip_spent'))
+  Ui.tooltip.register(fuse_rect, tr('fuse_tip_title'), tr(fuse_on and 'fuse_tip_ready' or 'fuse_tip_spent'), {
+    icon = fuse_on and 'insurance' or 'x',
+    icon_color = fuse_on and C.green or C.dim,
+    color = fuse_on and C.green or C.dim,
+  })
 
   if run.boss_encounter then
     local boss = run:boss_encounter()
@@ -138,15 +142,8 @@ function Views.draw_choose(screen, header_text_y, mouse)
 
   local offers = run:node_offers()
   local rects = Cards.offer_rects(offers)
-  local has_rare = false
   for i, offer in ipairs(offers) do
-    if offer.kind == 'recruit' and Cards.is_rare_recruit(offer) then
-      has_rare = true
-    end
     Cards.draw_offer(offer, rects[i], mouse)
-  end
-  if not has_rare then
-    Cards.draw_empty_rare_slot(run.wave or 1, mouse)
   end
 
   Ui.hline(8, Cards.STOCK_Y - 5, T.W - 16, C.line, 0.8)
@@ -168,9 +165,23 @@ function Views.draw_choose(screen, header_text_y, mouse)
 
   Ui.button_rect(Views.SELL_BTN, tr('sell'), {}, mouse)
   local charge = run.charge or 0
-  Cards.draw_charge_button(Views.REROLL_BTN, tr('charge_reroll'), 1, charge < 1, mouse)
-  Cards.draw_charge_button(Views.ADJUST_BTN, tr('charge_adjust'), 2, charge < 2 or run:alive_count() == 0, mouse)
-  Cards.draw_charge_button(Views.TRIAGE_BTN, tr('charge_triage'), 2, charge < 2 or #run:wounded_slots() == 0, mouse)
+  Cards.draw_charge_button(Views.REROLL_BTN, tr('charge_reroll'), 1, charge < 1, mouse, tr('charge_reroll_tip'))
+  Cards.draw_charge_button(
+    Views.ADJUST_BTN,
+    tr('charge_adjust'),
+    2,
+    charge < 2 or run:alive_count() == 0,
+    mouse,
+    tr('charge_adjust_tip')
+  )
+  Cards.draw_charge_button(
+    Views.TRIAGE_BTN,
+    tr('charge_triage'),
+    2,
+    charge < 2 or #run:wounded_slots() == 0,
+    mouse,
+    tr('charge_triage_tip')
+  )
 
   Ui.button_rect(Views.LEAVE_BTN, tr('leave'), { primary = true }, mouse)
 end

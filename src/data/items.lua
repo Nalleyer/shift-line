@@ -21,7 +21,7 @@ local RELICS = {
   far_lens = {
     name = 'FAR LENS',
     short = 'FAR SUPPORT',
-    description = 'Support abilities also reach 2 slots away.',
+    description = 'Guard, Heal, and Charge auras also reach allies 2 slots away.',
     icon = 'far_lens',
     rarity = 'rare',
     price = 5,
@@ -148,7 +148,7 @@ register_active({
   id = 'core_cell',
   name = 'CORE CELL',
   short = 'CORE +1',
-  description = 'Camp gift: buy for 0G to store in consumables, then use to restore 1 Core.',
+  description = 'Consumable: restores 1 Core integrity.',
   icon = 'core_mend',
   rarity = 'common',
   price = 0,

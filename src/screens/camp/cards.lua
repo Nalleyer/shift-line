@@ -20,7 +20,6 @@ Cards.SERVICE_Y = Cards.RECRUIT_Y + Cards.RECRUIT_H + 4
 Cards.SERVICE_H = 19
 Cards.STOCK_Y = Cards.SERVICE_Y + Cards.SERVICE_H + 10
 Cards.STOCK_H = 34
-Cards.RARE_SLOT_RECT = { x = 288, y = Cards.RECRUIT_Y, w = 88, h = Cards.RECRUIT_H }
 
 local CATEGORY_FRAMES = {
   recruit = { color = C.paper, pixels = { '###', '#..', '#..' } },
@@ -95,12 +94,16 @@ function Cards.offer_rects(offers)
 
   local margin, gap = 8, 4
   local rects = {}
-  local cw = 88
-  for slot, idx in ipairs(common_recs) do
-    rects[idx] = { x = margin + (slot - 1) * (cw + gap), y = Cards.RECRUIT_Y, w = cw, h = Cards.RECRUIT_H }
+  local recruits = {}
+  for _, idx in ipairs(common_recs) do
+    recruits[#recruits + 1] = idx
   end
   if rare_rec then
-    rects[rare_rec] = Cards.RARE_SLOT_RECT
+    recruits[#recruits + 1] = rare_rec
+  end
+  local rw = math.floor((T.W - 2 * margin + gap) / math.max(1, #recruits)) - gap
+  for slot, idx in ipairs(recruits) do
+    rects[idx] = { x = margin + (slot - 1) * (rw + gap), y = Cards.RECRUIT_Y, w = rw, h = Cards.RECRUIT_H }
   end
 
   local sw = math.floor((T.W - 2 * margin + gap) / math.max(1, #services)) - gap
@@ -201,20 +204,6 @@ local function draw_recruit_card(o, r, mouse)
   Ui.tooltip.register(r, I18n.offer_title(o), { rlabel .. sep .. stats_line, I18n.unit_blurb({ kind = o.class, hp = d.hp }) })
 end
 
-function Cards.draw_empty_rare_slot(wave, mouse)
-  local r = Cards.RARE_SLOT_RECT
-  local closed = wave > 7
-  local hot = Ui.hit(r, mouse.x, mouse.y)
-  Ui.rect(r.x, r.y, r.w, r.h, C.ink, hot and 0.95 or 0.75)
-  Ui.frame(r.x, r.y, r.w, r.h, hot and C.dim or C.line, 0.55)
-  Ui.hline(r.x + 2, r.y + 2, r.w - 4, closed and C.line or C.blue, 0.3, 4)
-  Ui.icon('star', r.x + 10, r.y + r.h / 2, 1, closed and C.dim or C.blue, 0.45)
-  Text.fit_text(tr(closed and 'rare_closed' or 'rare_none'), r.x + 18, r.y + math.floor((r.h - Ui.text_h) / 2), r.w - 22, {
-    color = C.dim,
-  })
-  Ui.tooltip.register(r, tr('rare_slot_title'), tr(closed and 'rare_slot_closed_tip' or 'rare_slot_empty_tip'))
-end
-
 function Cards.draw_offer(o, r, mouse)
   if o.kind == 'recruit' then
     draw_recruit_card(o, r, mouse)
@@ -298,13 +287,16 @@ function Cards.draw_offer(o, r, mouse)
   end
 end
 
-function Cards.draw_charge_button(r, label, cost, disabled, mouse)
+function Cards.draw_charge_button(r, label, cost, disabled, mouse, tip_body)
   local hot = not disabled and Ui.hit(r, mouse.x, mouse.y)
   Ui.button(r.x, r.y, r.w, r.h, '', { disabled = disabled, hover = hot })
   local lcol = disabled and C.dim or (hot and C.white or C.paper)
   local bcol = disabled and C.dim or C.blue
   Text.fit_text(label, r.x + 4, r.y + math.floor((r.h - Ui.text_h) / 2), r.w - 24, { color = lcol })
   Ui.icon_text('charge', cost, r.x + r.w - 4, r.y + 7, { align = 'right', color = bcol })
+  if tip_body then
+    Ui.tooltip.register(r, label, tip_body, { icon = 'charge', icon_color = C.blue, color = C.blue })
+  end
 end
 
 return Cards

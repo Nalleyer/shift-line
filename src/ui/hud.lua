@@ -130,10 +130,22 @@ function Hud.topbar(core, core_max, ctx)
   end
 
   Tooltip.loadout_tip = nil
-  Tooltip.register({ x = 4, y = 2, w = 100, h = 18 }, I18n.t('ui.core'), I18n.t('ui.core_current', core, core_max))
+  Tooltip.register({ x = 4, y = 2, w = 100, h = 18 }, I18n.t('ui.core'), I18n.t('ui.core_current', core, core_max), {
+    icon = 'heart',
+    icon_color = C.red,
+    color = C.red,
+  })
   if run then
-    Tooltip.register({ x = 108, y = 2, w = 34, h = 18 }, I18n.t('result.gold'), I18n.t('ui.gold_current', gold))
-    Tooltip.register({ x = 142, y = 2, w = 31, h = 18 }, I18n.t('ui.charge'), I18n.t('ui.charge_current', charge, charge_max))
+    Tooltip.register({ x = 108, y = 2, w = 34, h = 18 }, I18n.t('result.gold'), I18n.t('ui.gold_current', gold), {
+      icon = 'coin',
+      icon_color = C.amber,
+      color = C.amber,
+    })
+    Tooltip.register({ x = 142, y = 2, w = 31, h = 18 }, I18n.t('ui.charge'), I18n.t('ui.charge_current', charge, charge_max), {
+      icon = 'charge',
+      icon_color = C.blue,
+      color = C.blue,
+    })
   end
 
   if not run or ctx.show_loadout == false then
@@ -184,6 +196,7 @@ function Hud.topbar(core, core_max, ctx)
           x = slot.x,
           name = name,
           description = description,
+          definition = d,
           kind = slot.kind,
           index = slot.index,
           can_use = slot.can_use,
