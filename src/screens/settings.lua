@@ -1,4 +1,4 @@
--- Settings screen: immediate persistent language selection.
+-- Settings screen: battle-style A/D Swordsman menu for language selection and back.
 local App = require('app')
 local Audio = require('platform.audio')
 local Settings = require('platform.settings')
@@ -9,28 +9,50 @@ local T = Ui.theme
 local C = Ui.C
 local Text = Ui.text
 
-local Screen = { t = 0, hover = nil }
+local Screen = { t = 0, menu = nil }
 
-local OPTION_Y = 120
-local OPTION_W = 132
-local OPTION_H = 40
-local OPTION_X = { 52, 200 }
-local BACK = { x = 132, y = 184, w = 120, h = 26 }
-
-local function options()
+local function build_targets()
   return {
-    { locale = 'zh', label = I18n.t('settings.lang_zh') },
-    { locale = 'en', label = I18n.t('settings.lang_en') },
+    {
+      id = 'zh',
+      label = I18n.t('settings.lang_zh'),
+      icon = 'lang_zh',
+      color = C.amber,
+      active = I18n.locale == 'zh',
+      sound = 'ui_select',
+    },
+    {
+      id = 'en',
+      label = I18n.t('settings.lang_en'),
+      icon = 'lang_en',
+      color = C.blue,
+      active = I18n.locale == 'en',
+      sound = 'ui_select',
+    },
+    {
+      id = 'back',
+      label = I18n.t('common.back'),
+      icon = 'arrowL',
+      color = C.paper,
+      sound = 'ui_move',
+    },
   }
-end
-
-local function option_rect(i)
-  return { x = OPTION_X[i], y = OPTION_Y, w = OPTION_W, h = OPTION_H }
 end
 
 function Screen:enter()
   self.t = 0
-  self.hover = nil
+  self.menu = Ui.duel_menu.new({
+    y_enemy = 132,
+    y_player = 188,
+    default_col = I18n.locale == 'zh' and 1 or 2,
+    on_select = function(target)
+      if target.id == 'back' then
+        App.go('title')
+      else
+        self:choose(target.id)
+      end
+    end,
+  })
   Audio.music('title')
 end
 
@@ -45,6 +67,9 @@ function Screen:choose(locale)
 end
 
 function Screen:keypressed(key)
+  if self.menu and self.menu:keypressed(key, build_targets()) then
+    return
+  end
   if key == 'escape' or key == 'backspace' then
     Audio.play('ui_move')
     App.go('title')
@@ -55,28 +80,15 @@ function Screen:mousepressed(x, y, button)
   if button ~= 1 then
     return
   end
-  for i = 1, 2 do
-    if Ui.hit(option_rect(i), x, y) then
-      self:choose(options()[i].locale)
-      return
-    end
-  end
-  if Ui.hit(BACK, x, y) then
-    Audio.play('ui_move')
-    App.go('title')
+  if self.menu then
+    self.menu:mousepressed(x, y, build_targets())
   end
 end
 
 function Screen:update(dt)
   self.t = self.t + dt
-  self.hover = nil
-  for i = 1, 2 do
-    if Ui.hit(option_rect(i), App.mouse.x, App.mouse.y) then
-      self.hover = i
-    end
-  end
-  if Ui.hit(BACK, App.mouse.x, App.mouse.y) then
-    self.hover = 'back'
+  if self.menu then
+    self.menu:update(dt, App.mouse, build_targets())
   end
 end
 
@@ -87,28 +99,9 @@ function Screen:draw()
   Text.text(I18n.t('settings.title'), T.W / 2, 38, { scale = 3, color = C.white, align = 'center' })
   Ui.hline(T.W / 2 - 120, 84, 240, C.amber, 0.6)
 
-  for i, option in ipairs(options()) do
-    local r = option_rect(i)
-    local active = option.locale == I18n.locale
-    local hot = self.hover == i
-    local border = active and C.amber or (hot and C.white or C.line)
-    local fill = (active or hot) and C.panel or C.shade
-    Ui.rect(r.x, r.y, r.w, r.h, fill)
-    Ui.frame(r.x, r.y, r.w, r.h, border)
-    if active then
-      Ui.frame(r.x + 1, r.y + 1, r.w - 2, r.h - 2, C.amber, 0.25)
-    end
-    Text.text(option.label, r.x + r.w / 2, r.y + math.floor((r.h - Ui.text_h) / 2), {
-      color = (active or hot) and C.white or C.dim,
-      align = 'center',
-    })
+  if self.menu then
+    self.menu:draw(build_targets(), self.t, App.mouse)
   end
-
-  Ui.button(BACK.x, BACK.y, BACK.w, BACK.h, I18n.t('common.back'), {
-    color = C.paper,
-    sub = 'ESC',
-    hover = self.hover == 'back',
-  })
 
   Ui.footer(I18n.t('settings.hint'))
 end

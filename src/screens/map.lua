@@ -23,7 +23,7 @@ local INTEL_TITLE_Y, INTEL_SUB_Y = 154, 168
 local INTEL_ENEMY_Y, INTEL_ALLY_Y, INTEL_CELL_H = 183, 218, 33
 local ACT_BTN = { x = 294, y = 218, w = 78, h = 25 }
 local CAMP_BTN = { x = 294, y = 155, w = 78, h = 16 }
-local TITLE_BTN = { x = 268, y = 258, w = 108, h = 24 }
+local TITLE_BTN = { x = 8, y = 263, w = 18, h = 18 }
 
 local function tr(key, ...)
   return I18n.t('map.' .. key, ...)
@@ -72,14 +72,15 @@ end
 
 local function rail_segment(x1, y1, x2, y2, col, thick, alpha)
   local w = thick and 2 or 1
+  local off = thick and 1 or 0
   if y1 == y2 then
-    Ui.rect(x1, y1 - (thick and 1 or 0), x2 - x1, w, col, alpha)
+    Ui.rect(x1, y1 - off, x2 - x1, w, col, alpha)
   else
     local xm = math.floor((x1 + x2) / 2)
     local top, bot = math.min(y1, y2), math.max(y1, y2)
-    Ui.rect(x1, y1 - (thick and 1 or 0), xm - x1, w, col, alpha)
-    Ui.rect(xm, top, w, bot - top + 1, col, alpha)
-    Ui.rect(xm, y2 - (thick and 1 or 0), x2 - xm, w, col, alpha)
+    Ui.rect(x1, y1 - off, xm - x1, w, col, alpha)
+    Ui.rect(xm, top - off, w, bot - top + w, col, alpha)
+    Ui.rect(xm + w, y2 - off, x2 - (xm + w), w, col, alpha)
   end
 end
 
@@ -408,24 +409,35 @@ function Map:draw_rails(nodes)
 
   local top_active = self:is_node_active(f_top) and self.selected_branch == 1
   local bot_active = self:is_node_active(f_bot) and self.selected_branch == 2
-  rail_segment(
-    xof(pre_fork),
-    node_y(pre_fork),
-    xof(f_top),
-    node_y(f_top),
-    self:is_node_done(f_top) and C.green or (top_active and C.amber or C.line),
-    self:is_node_done(f_top) or top_active,
-    is_node_skipped(run, f_top) and 0.18 or 0.7
-  )
-  rail_segment(
-    xof(pre_fork),
-    node_y(pre_fork),
-    xof(f_bot),
-    node_y(f_bot),
-    self:is_node_done(f_bot) and C.green or (bot_active and C.amber or C.red),
-    self:is_node_done(f_bot) or bot_active,
-    is_node_skipped(run, f_bot) and 0.18 or 0.55
-  )
+  local function draw_top_fork()
+    rail_segment(
+      xof(pre_fork),
+      node_y(pre_fork),
+      xof(f_top),
+      node_y(f_top),
+      self:is_node_done(f_top) and C.green or (top_active and C.amber or C.line),
+      self:is_node_done(f_top) or top_active,
+      is_node_skipped(run, f_top) and 0.18 or 0.7
+    )
+  end
+  local function draw_bot_fork()
+    rail_segment(
+      xof(pre_fork),
+      node_y(pre_fork),
+      xof(f_bot),
+      node_y(f_bot),
+      self:is_node_done(f_bot) and C.green or (bot_active and C.amber or C.red),
+      self:is_node_done(f_bot) or bot_active,
+      is_node_skipped(run, f_bot) and 0.18 or 0.55
+    )
+  end
+  if is_node_skipped(run, f_top) and not is_node_skipped(run, f_bot) then
+    draw_top_fork()
+    draw_bot_fork()
+  else
+    draw_bot_fork()
+    draw_top_fork()
+  end
 
   link(f_top, camp_top)
   link(camp_top, post_fork)
@@ -518,8 +530,6 @@ function Map:draw_nodes(nodes)
       end
       local bob = math.sin(self.t * 6) * 1.2
       local lead = run.roster[run:alive_slots()[1] or 3] or { kind = 'S' }
-      Ui.rect(tx - 6, ty - 22 + bob, 12, 11, C.ink, 0.9)
-      Ui.frame(tx - 6, ty - 22 + bob, 12, 11, C.amber, 0.95)
       Ui.unit(lead.kind, tx, ty - 17 + bob, 1, C.amber)
     end
   end
@@ -587,11 +597,6 @@ function Map:draw_intel()
       Text.text(badge, 280, INTEL_TITLE_Y, { align = 'right', color = C.green })
     end
     Text.fit_text(n.branch == 1 and tr('camp_top_note') or tr('camp_sub'), 14, INTEL_SUB_Y, 264, { color = C.dim })
-
-    Ui.rect(14, INTEL_ENEMY_Y, 266, INTEL_CELL_H, C.ink, 0.85)
-    Ui.frame(14, INTEL_ENEMY_Y, 266, INTEL_CELL_H, C.blue, 0.45)
-    Ui.icon('gear', 26, INTEL_ENEMY_Y + 16, 1, C.blue)
-    Text.wrap_text(tr('camp_desc'), 36, INTEL_ENEMY_Y + 4, 238, { color = C.paper, max_lines = 2 })
   else
     local title_key = is_boss and (w == #Encounters.WAVES and 'node_finalboss' or 'node_miniboss')
       or (n.fork and (n.branch == 2 and 'node_bounty' or 'node_std') or 'node_battle')
@@ -750,8 +755,16 @@ function Map:draw()
   self:draw_intel()
   self:draw_action_panel()
 
-  Ui.footer(tr(self:can_select_fork() and 'hint_fork' or 'hint_move'))
-  Ui.button_rect(TITLE_BTN, I18n.t('battle.quit_title'), {}, App.mouse)
+  Ui.footer(nil, tr(self:can_select_fork() and 'hint_fork' or 'hint_move'))
+  local title_hot = not self.quit_confirm and Ui.hit(TITLE_BTN, App.mouse.x, App.mouse.y)
+  Ui.button_rect(TITLE_BTN, '', { hover = title_hot }, App.mouse)
+  Ui.icon('arrowL', TITLE_BTN.x + 9, TITLE_BTN.y + 9, 1, title_hot and C.white or C.dim)
+  if not self.quit_confirm then
+    Ui.tooltip.register(TITLE_BTN, I18n.t('battle.quit_title'), I18n.t('battle.quit_confirm'), {
+      icon = 'arrowL',
+      color = C.paper,
+    })
+  end
 
   if self.quit_confirm then
     Ui.begin_frame(App.mouse)

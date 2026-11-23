@@ -33,10 +33,17 @@ function Confirm.mousepressed(x, y, button)
   return nil
 end
 
-function Confirm.draw(mouse, message)
+function Confirm.draw(mouse, message, opts)
+  opts = opts or {}
+  local text = message or ''
+  if opts.reveal_chars ~= nil then
+    local chars = Text.chars(text)
+    local count = math.max(0, math.min(#chars, opts.reveal_chars))
+    text = table.concat(chars, '', 1, count)
+  end
   Draw.rect(0, 0, Theme.W, Theme.H, C.ink, 0.85)
   Draw.panel(52, 105, 280, 70, { fill = C.shade, border = C.amber })
-  Text.fit_text(message or '', Theme.W / 2, 115, 260, { color = C.white, align = 'center' })
+  Text.wrap_text(text, Theme.W / 2, 113, 256, { color = C.white, align = 'center', max_lines = 2 })
   Draw.button_rect(Confirm.CANCEL_RECT, I18n.t('common.back'), {}, mouse)
   Draw.button_rect(Confirm.CONFIRM_RECT, I18n.t('common.confirm'), { primary = true, color = C.white }, mouse)
 end

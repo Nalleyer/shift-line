@@ -244,11 +244,13 @@ function Views.draw_sell(screen, mouse)
     end
     local name = kind == 'relic' and I18n.relic_name(id) or I18n.active_name(id)
     Text.wrap_text(name, r.x + 5, r.y + 4, r.w - 10, { color = C.paper, max_lines = 2 })
-    Text.text('+' .. tostring(run:sell_value(kind, i) or 0), r.x + r.w - 4, r.y + r.h - 10, {
+    local sell_val = '+' .. tostring(run:sell_value(kind, i) or 0)
+    Text.text(sell_val, r.x + r.w - 14, r.y + r.h - 10, {
       align = 'right',
       color = C.amber,
       bitmap = true,
     })
+    Ui.icon('coin', r.x + r.w - 8, r.y + r.h - 7, 1, C.amber)
     if slot.count > 1 then
       Text.text('x' .. slot.count, r.x + 20, r.y + r.h - 10, { color = C.paper, bitmap = true })
     end
@@ -262,10 +264,18 @@ function Views.draw_sell(screen, mouse)
   end
 
   local value = screen.sell_kind and run:sell_value(screen.sell_kind, screen.sell_index)
-  Text.text(value and tr('sell_refund', value) or tr('sell_prompt'), T.W / 2, 209, {
-    align = 'center',
-    color = C.amber,
-  })
+  if value then
+    local msg = tr('sell_refund', value)
+    local tw = Text.width(msg)
+    local sx = math.floor((T.W - (tw + 11)) / 2)
+    Text.text(msg, sx, 209, { color = C.amber })
+    Ui.icon('coin', sx + tw + 6, 209 + (Ui.cjk and 5 or 3), 1, C.amber)
+  else
+    Text.text(tr('sell_prompt'), T.W / 2, 209, {
+      align = 'center',
+      color = C.amber,
+    })
+  end
   Ui.button_rect(Views.BACK_BTN, I18n.t('common.back'), { color = C.paper }, mouse)
   Ui.button_rect(Views.CONFIRM_BTN, I18n.t('common.confirm'), {
     disabled = not value,

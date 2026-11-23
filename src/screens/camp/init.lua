@@ -143,6 +143,7 @@ function Screen:keypressed(key)
     local action = Ui.dialogs.confirm.keypressed(key)
     if action == 'confirm' then
       self.leave_confirm = false
+      self.run.camp_leave_warned = true
       Audio.play('ui_select')
       self:finish()
     elseif action == 'cancel' then
@@ -215,6 +216,7 @@ function Screen:mousepressed(x, y, button)
     local action = Ui.dialogs.confirm.mousepressed(x, y, button)
     if action == 'confirm' then
       self.leave_confirm = false
+      self.run.camp_leave_warned = true
       Audio.play('ui_select')
       self:finish()
     elseif action == 'cancel' then
@@ -269,7 +271,12 @@ function Screen:mousepressed(x, y, button)
     end
     if Ui.hit(Views.LEAVE_BTN, x, y) then
       Audio.play('ui_select', 0.7)
-      self.leave_confirm = true
+      if self.run.camp_leave_warned then
+        self:finish()
+      else
+        self.leave_confirm = true
+        self.leave_confirm_t = 0
+      end
       return
     end
     if Ui.hit(Views.SELL_BTN, x, y) then
@@ -388,6 +395,9 @@ end
 
 function Screen:update(dt)
   self.t = self.t + dt
+  if self.leave_confirm then
+    self.leave_confirm_t = (self.leave_confirm_t or 0) + dt
+  end
 end
 
 function Screen:draw()
@@ -415,7 +425,10 @@ function Screen:draw()
 
   if self.leave_confirm then
     Ui.begin_frame(App.mouse)
-    Ui.dialogs.confirm.draw(App.mouse, I18n.t('shop.leave_confirm'))
+    local cps = Ui.cjk and 26 or 44
+    Ui.dialogs.confirm.draw(App.mouse, I18n.t('shop.leave_confirm'), {
+      reveal_chars = math.floor((self.leave_confirm_t or 0) * cps),
+    })
   end
 end
 

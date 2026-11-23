@@ -255,11 +255,11 @@ local ok, err = xpcall(function()
   App.go('map', { from_camp = true })
 
   -- Quit confirm cancel vs confirm
-  Map:mousepressed(330, 268, 1) -- TITLE_BTN
+  Map:mousepressed(17, 272, 1) -- TITLE_BTN
   assert_true(Map.quit_confirm, 'clicking Quit opens confirmation dialog')
   Map:mousepressed(105, 150, 1) -- Cancel
   assert_true(not Map.quit_confirm and App.current_name == 'map', 'Cancel keeps player on map')
-  Map:mousepressed(330, 268, 1)
+  Map:mousepressed(17, 272, 1)
   Map:mousepressed(259, 150, 1) -- Confirm
   assert_eq(App.current_name, 'title', 'Confirm returns to title screen')
 

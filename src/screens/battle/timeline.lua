@@ -85,7 +85,7 @@ function Timeline.apply_frame(battle, f)
       Audio.play('node', 0.65, 1.35)
     end
   elseif f.kind == 'clash' then
-    battle.message = I18n.t(f.side == 'enemy' and 'battle.enemy_phase' or 'battle.ally_phase')
+    -- Phase banner suppressed so playback hint stays clean.
   elseif f.kind == 'action' then
     fx.actor = { side = f.ev.side, col = f.ev.from, kind = f.ev.kind, t = 0 }
     if f.ev.kind == 'taunt' or f.ev.kind == 'intercept' then
@@ -136,7 +136,6 @@ function Timeline.apply_frame(battle, f)
     end
     Audio.play('heal', 0.55)
   elseif f.kind == 'hit' then
-    battle.message = I18n.t(f.side == 'enemy' and 'battle.enemy_phase' or 'battle.ally_phase')
     local maxdmg = 0
     for _, d in ipairs(f.dmgs) do
       if d.target == 'player' then

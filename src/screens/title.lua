@@ -1,7 +1,6 @@
--- Title screen: game logo, menu, language toggle, and optional fixed seed entry.
+-- Title screen: game logo, battle-style A/D Swordsman menu, language toggle, and fixed seed entry.
 local App = require('app')
 local Audio = require('platform.audio')
-local Settings = require('platform.settings')
 local I18n = require('i18n')
 local Ui = require('ui')
 
@@ -9,53 +8,46 @@ local T = Ui.theme
 local C = Ui.C
 local Text = Ui.text
 
-local Title = { t = 0, hover = nil, editing = false, blink = 0 }
-
-local ITEMS = {
-  { id = 'start', key = 'title.start' },
-  { id = 'settings', key = 'title.settings' },
-  { id = 'quit', key = 'title.quit' },
+local Title = {
+  t = 0,
+  editing = false,
+  blink = 0,
+  menu = nil,
 }
 
-local MENU_Y = 168
-local MENU_STEP = 24
-local CHECK = { x = 14, y = 239 }
+local CHECK = { x = 14, y = 256 }
 
-local function item_box(i)
-  local y = MENU_Y + (i - 1) * MENU_STEP
-  local box_y = Ui.cjk and (y - 3) or (y - 5)
-  local box_h = Ui.cjk and 18 or 16
-  return 112, box_y, 160, box_h, y
+local function build_targets()
+  return {
+    { id = 'settings', label = I18n.t('title.settings'), icon = 'gear', color = C.blue, sound = 'ui_select' },
+    { id = 'start', label = I18n.t('title.start'), icon = 'attack', color = C.amber, sound = 'fight' },
+    { id = 'quit', label = I18n.t('title.quit'), icon = 'x', color = C.red, sound = 'ui_move' },
+  }
 end
 
-function Title:enter()
-  self.t = 0
-  self.hover = nil
-  self.editing = false
-  self.blink = 0
-  Audio.music('title')
-end
-
-function Title:activate(index)
-  local item = ITEMS[index]
-  if not item then
-    return
-  end
-  if item.id == 'start' then
-    Audio.play('fight', 0.8)
+function Title:activate(id)
+  if id == 'start' then
     App.start_run(App.chosen_seed())
-  elseif item.id == 'settings' then
-    Audio.play('ui_select')
+  elseif id == 'settings' then
     App.go('settings')
-  else
+  elseif id == 'quit' then
     love.event.quit()
   end
 end
 
-function Title:toggle_language()
-  Settings.set_locale(I18n.other_locale())
-  Ui.set_locale(I18n.locale)
-  Audio.play('ui_select')
+function Title:enter()
+  self.t = 0
+  self.editing = false
+  self.blink = 0
+  self.menu = Ui.duel_menu.new({
+    y_enemy = 152,
+    y_player = 204,
+    default_col = 2,
+    on_select = function(target)
+      self:activate(target.id)
+    end,
+  })
+  Audio.music('title')
 end
 
 function Title:check_box()
@@ -77,20 +69,9 @@ end
 function Title:update(dt)
   self.t = self.t + dt
   self.blink = self.blink + dt
-
-  local mx, my = App.mouse.x, App.mouse.y
-  local hovered = nil
-  for i = 1, #ITEMS do
-    local bx, by, bw, bh = item_box(i)
-    if mx >= bx and mx <= bx + bw and my >= by and my <= by + bh then
-      hovered = i
-      break
-    end
+  if self.menu then
+    self.menu:update(dt, App.mouse, build_targets())
   end
-  if hovered and hovered ~= self.hover then
-    Audio.play('ui_move', 0.5)
-  end
-  self.hover = hovered
 end
 
 function Title:keypressed(key)
@@ -114,18 +95,11 @@ function Title:keypressed(key)
     return
   end
 
-  if key == 'f' then
-    self:toggle_fixed()
-  elseif key == 'l' then
-    self:toggle_language()
-  elseif key == 'e' then
-    if App.fixed_seed then
-      self.editing = true
-      Audio.play('ui_select', 0.7)
-    else
-      Audio.play('ui_deny', 0.6)
-    end
-  elseif key == 'escape' then
+  if self.menu and self.menu:keypressed(key, build_targets()) then
+    return
+  end
+
+  if key == 'escape' then
     love.event.quit()
   end
 end
@@ -144,20 +118,16 @@ function Title:mousepressed(x, y, button)
     end
     return
   end
-  for i = 1, #ITEMS do
-    local bx, by, bw, bh = item_box(i)
-    if x >= bx and x <= bx + bw and y >= by and y <= by + bh then
-      self:activate(i)
-      return
-    end
+  if self.menu then
+    self.menu:mousepressed(x, y, build_targets())
   end
 end
 
 local function draw_logo(t)
   local cx = T.W / 2
-  Text.text('SHIFTLINE', cx + 3, 91, { scale = 5, align = 'center', color = C.red_dk, bitmap = true })
-  Text.text('SHIFTLINE', cx, 88, { scale = 5, align = 'center', color = C.white, bitmap = true })
-  local y = 130
+  Text.text('SHIFTLINE', cx + 3, 75, { scale = 5, align = 'center', color = C.red_dk, bitmap = true })
+  Text.text('SHIFTLINE', cx, 72, { scale = 5, align = 'center', color = C.white, bitmap = true })
+  local y = 114
   Ui.hline(cx - 132, y, 264, C.amber, 0.7)
   local notch = (t * 46) % 264
   Ui.rect(cx - 132 + notch, y - 2, 12, 5, C.ink)
@@ -198,26 +168,12 @@ function Title:draw()
   Ui.draw_grid_bg(self.t, 18, 200)
   draw_logo(self.t)
 
-  for i, item in ipairs(ITEMS) do
-    local bx, by, bw, bh, y = item_box(i)
-    local hovered = (i == self.hover)
-    local primary = (i == 1)
-    local fill = hovered and C.panel or (primary and Ui.mix(C.shade, C.amber, 0.10) or C.shade)
-    local border = hovered and C.amber or (primary and Ui.mix(C.line, C.amber, 0.35) or C.line)
-    Ui.rect(bx, by, bw, bh, fill, hovered and 0.95 or 0.75)
-    Ui.frame(bx, by, bw, bh, border, hovered and 1 or 0.7)
-    if hovered then
-      Ui.frame(bx + 1, by + 1, bw - 2, bh - 2, C.amber, 0.25)
-    end
-    Text.text(I18n.t(item.key), T.W / 2, y, {
-      color = hovered and C.white or (primary and C.paper or C.dim),
-      align = 'center',
-    })
+  if self.menu then
+    self.menu:draw(build_targets(), self.t, App.mouse)
   end
 
   self:draw_seed()
   Text.text(App.VERSION or '', T.W - 8, 8, { color = C.dim, alpha = 0.40, align = 'right', bitmap = true })
-  Ui.footer(I18n.t('title.footer_select'), I18n.t('title.footer_keys'))
 end
 
 return Title

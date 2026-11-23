@@ -8,6 +8,7 @@ local Inspector = require('ui.inspector')
 local Hud = require('ui.hud')
 local Roster = require('ui.roster')
 local Dialogs = require('ui.dialogs')
+local DuelMenu = require('ui.duel_menu')
 
 local Ui = {
   T = Theme,
@@ -21,6 +22,7 @@ local Ui = {
   hud = Hud,
   roster = Roster,
   dialogs = Dialogs,
+  duel_menu = DuelMenu,
   cjk = Assets.cjk,
   line_h = Assets.line_h,
   text_h = Assets.text_h,

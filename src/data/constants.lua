@@ -18,7 +18,7 @@ local Constants = {
   START_GOLD = 5,
   START_SLOT = 3,
   START_UNIT = 'S',
-  START_INVENTORY = { 'shift_both' },
+  START_INVENTORY = { 'shift_both', 'medkit' },
 
   ENEMY_BOUNTIES = {
     g = 2,

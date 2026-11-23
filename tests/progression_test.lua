@@ -30,6 +30,7 @@ assert_eq(r0.core, Constants.CORE_MAX, 'starts with full core')
 assert_eq(r0.fuse, Constants.FUSE_MAX, 'starts with full fuse')
 assert_eq(r0.roster[Constants.START_SLOT].kind, Constants.START_UNIT, 'starter S at slot 3')
 assert_eq(r0.inventory[1], 'shift_both', 'starts with shift_both')
+assert_eq(r0.inventory[2], 'medkit', 'starts with medkit')
 
 -- 2. Full 15-wave victory flow & gauntlet fork skip
 local strong = Run.new(42, {
@@ -130,7 +131,7 @@ end
 assert_true(gift_idx ~= nil, 'wave 2 offers free core_cell gift')
 assert_eq(#Camp.offer_targets(shop_run, dismiss_idx), 0, 'cannot dismiss the sole survivor')
 assert_true(shop_run:apply_offer(gift_idx), 'claim free wave 2 core_cell')
-assert_eq(shop_run.inventory[2], 'core_cell', 'core_cell added to inventory')
+assert_eq(shop_run.inventory[3], 'core_cell', 'core_cell added to inventory')
 assert_true(shop_run.wave2_gift_claimed, 'wave2_gift_claimed recorded')
 
 -- Selling core_cell (price 0 -> sell value 0) and shift_both (price 3 -> sell value 1)
