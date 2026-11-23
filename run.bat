@@ -101,7 +101,7 @@ exit /b %errorlevel%
 if not exist dist mkdir dist
 if exist dist\shift-line.love del /f /q dist\shift-line.love
 if exist dist\shift-line.zip del /f /q dist\shift-line.zip
-powershell -NoProfile -Command "Compress-Archive -Path conf.lua, main.lua, src, assets -DestinationPath dist\shift-line.zip -Force; Move-Item -Force dist\shift-line.zip dist\shift-line.love"
+powershell -NoProfile -Command "$ProgressPreference = 'SilentlyContinue'; Compress-Archive -Path conf.lua, main.lua, src, assets -DestinationPath dist\shift-line.zip -Force; Move-Item -Force dist\shift-line.zip dist\shift-line.love"
 if errorlevel 1 (
     echo Failed to build dist\shift-line.love 1>&2
     exit /b 1

@@ -1,0 +1,285 @@
+name: Build & Package SHIFTLINE
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  LOVE_VERSION: '11.5'
+  GAME_NAME: 'SHIFTLINE'
+  SLUG: 'shift-line'
+
+jobs:
+  test:
+    name: Test & Build .love
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install LuaJIT and zip
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y luajit zip
+
+      - name: Run headless test suite
+        run: luajit tests/run_all.lua
+
+      - name: Build universal .love archive
+        run: |
+          mkdir -p dist
+          zip -9 -r "dist/${SLUG}.love" conf.lua main.lua src assets -x 'assets/icon.ico'
+
+      - name: Upload .love artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shift-line-love
+          path: dist/shift-line.love
+
+  build-windows:
+    name: Build Windows (x64)
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download .love artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: shift-line-love
+          path: dist
+
+      - name: Download LÖVE ${{ env.LOVE_VERSION }} (win64) & rcedit
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build | Out-Null
+          Invoke-WebRequest -Uri "https://github.com/love2d/love/releases/download/$env:LOVE_VERSION/love-$env:LOVE_VERSION-win64.zip" -OutFile build/love-win64.zip
+          Expand-Archive -Path build/love-win64.zip -DestinationPath build/win64 -Force
+          Invoke-WebRequest -Uri "https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe" -OutFile build/rcedit-x64.exe
+
+      - name: Set custom icon and fuse SHIFTLINE.exe
+        shell: pwsh
+        run: |
+          $loveDir = (Get-ChildItem -Path build/win64 -Directory | Select-Object -First 1).FullName
+          $stage = "build/SHIFTLINE-win64"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+
+          # Copy runtime DLLs and LÖVE license
+          Copy-Item "$loveDir\*.dll" $stage
+          Copy-Item "$loveDir\license.txt" "$stage\LOVE-LICENSE.txt"
+          Copy-Item "LICENSE" "$stage\LICENSE.txt"
+
+          # Apply custom .ico BEFORE fusing (rcedit strips appended zip tails if run after fusing!)
+          Copy-Item "$loveDir\love.exe" "build/love-icon.exe"
+          & "build/rcedit-x64.exe" "build/love-icon.exe" `
+            --set-icon "assets/icon.ico" `
+            --set-version-string ProductName "$env:GAME_NAME" `
+            --set-version-string FileDescription "$env:GAME_NAME"
+
+          # Fuse modified love.exe + shift-line.love -> SHIFTLINE.exe
+          cmd /c copy /b "build\love-icon.exe" + "dist\$env:SLUG.love" "$stage\$env:GAME_NAME.exe"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          Compress-Archive -Path "$stage\*" -DestinationPath "dist/$env:SLUG-windows-x64.zip" -Force
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shift-line-windows-x64
+          path: dist/shift-line-windows-x64.zip
+
+  build-macos:
+    name: Build macOS (Universal)
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download .love artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: shift-line-love
+          path: dist
+
+      - name: Download LÖVE ${{ env.LOVE_VERSION }} (macOS)
+        run: |
+          mkdir -p build
+          curl -fL "https://github.com/love2d/love/releases/download/${LOVE_VERSION}/love-${LOVE_VERSION}-macos.zip" -o build/love-macos.zip
+          unzip -q build/love-macos.zip -d build/macos
+
+      - name: Bundle SHIFTLINE.app with custom icon
+        run: |
+          APP="build/${GAME_NAME}.app"
+          mv build/macos/love.app "$APP"
+          cp "dist/${SLUG}.love" "$APP/Contents/Resources/${GAME_NAME}.love"
+
+          # Build .icns from assets/icon.png
+          ICONSET="build/AppIcon.iconset"
+          mkdir -p "$ICONSET"
+          for sz in 16 32 128 256; do
+            sips -z $sz $sz assets/icon.png --out "$ICONSET/icon_${sz}x${sz}.png" >/dev/null
+            sz2=$((sz * 2))
+            sips -z $sz2 $sz2 assets/icon.png --out "$ICONSET/icon_${sz}x${sz}@2x.png" >/dev/null
+          done
+          iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/OS X AppIcon.icns"
+
+          # Update Info.plist
+          PLIST="$APP/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.nalleyer.shiftline" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleName ${GAME_NAME}" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Delete :UTExportedTypeDeclarations" "$PLIST" || true
+
+          # Ad-hoc sign so Gatekeeper accepts the modified bundle structure
+          codesign --force --deep --sign - "$APP"
+
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "dist/${SLUG}-macos.zip"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shift-line-macos
+          path: dist/shift-line-macos.zip
+
+  build-linux:
+    name: Build Linux (x86_64 AppImage)
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download .love artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: shift-line-love
+          path: dist
+
+      - name: Build fused Linux AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+        run: |
+          mkdir -p build
+          curl -fL "https://github.com/love2d/love/releases/download/${LOVE_VERSION}/love-${LOVE_VERSION}-x86_64.AppImage" -o build/love.AppImage
+          chmod +x build/love.AppImage
+
+          curl -fL "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage" -o build/appimagetool.AppImage
+          chmod +x build/appimagetool.AppImage
+
+          (cd build && ./love.AppImage --appimage-extract >/dev/null)
+          cat build/squashfs-root/bin/love "dist/${SLUG}.love" > build/squashfs-root/bin/love.fused
+          mv build/squashfs-root/bin/love.fused build/squashfs-root/bin/love
+          chmod +x build/squashfs-root/bin/love
+
+          cp assets/icon.png build/squashfs-root/shiftline.png
+          cat > build/squashfs-root/love.desktop << 'EOF'
+          [Desktop Entry]
+          Name=SHIFTLINE
+          Comment=Tactical roguelite auto-battler
+          MimeType=application/x-love-game;
+          Exec=love %f
+          Type=Application
+          Categories=Game;
+          Terminal=false
+          Icon=shiftline
+          NoDisplay=false
+          EOF
+
+          ARCH=x86_64 ./build/appimagetool.AppImage build/squashfs-root "dist/${SLUG}-linux-x86_64.AppImage"
+          chmod +x "dist/${SLUG}-linux-x86_64.AppImage"
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shift-line-linux-x86_64
+          path: dist/shift-line-linux-x86_64.AppImage
+
+  build-web:
+    name: Build Web (HTML5 / itch.io)
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install ffmpeg and zip
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg zip
+
+      - name: Prepare Web-optimized .love archive (OGG music + 768x576 canvas)
+        run: |
+          mkdir -p build/web-src dist
+          cp -r conf.lua main.lua src assets build/web-src/
+          rm -f build/web-src/assets/icon.ico
+
+          # Use 2x integer canvas (768x576) for crisp 1:1 itch.io HTML5 embed
+          sed -i 's/t.window.width = 384 \* 3/t.window.width = 384 * 2/' build/web-src/conf.lua
+          sed -i 's/t.window.height = 288 \* 3/t.window.height = 288 * 2/' build/web-src/conf.lua
+
+          # Convert BGM tracks from WAV to OGG (audio.lua prefers .ogg automatically)
+          for f in build/web-src/assets/music/*.wav; do
+            ffmpeg -y -loglevel error -i "$f" -c:a libvorbis -q:a 4 "${f%.wav}.ogg"
+            rm -f "$f"
+          done
+
+          (cd build/web-src && zip -9 -r ../../build/shift-line-web.love conf.lua main.lua src assets)
+          ls -lh build/shift-line-web.love
+
+      - name: Build HTML5 package with love.js (compatibility mode)
+        run: |
+          npx --yes love.js -c -t "${GAME_NAME}" -m 67108864 build/shift-line-web.love build/web-out
+          # Clean dark background and crisp pixel scaling for itch.io iframe
+          cat >> build/web-out/theme/love.css << 'EOF'
+
+          html, body {
+            background-color: #0B0E14 !important;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+          }
+          h1, footer {
+            display: none !important;
+          }
+          #canvas, #loadingCanvas {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+          }
+          EOF
+          (cd build/web-out && zip -9 -r "../../dist/${SLUG}-web.zip" .)
+
+      - name: Upload Web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shift-line-web
+          path: dist/shift-line-web.zip
+
+  release:
+    name: Publish GitHub Release
+    needs: [test, build-windows, build-macos, build-linux, build-web]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-files
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-files/*
+          generate_release_notes: true

@@ -43,11 +43,41 @@ function Audio.load()
     end
   end
   for _, name in ipairs(MUSIC_NAMES) do
-    local ok, src = pcall(love.audio.newSource, 'assets/music/' .. name .. '.wav', 'static')
+    local path = 'assets/music/' .. name .. '.ogg'
+    if not (love.filesystem and love.filesystem.getInfo and love.filesystem.getInfo(path)) then
+      path = 'assets/music/' .. name .. '.wav'
+    end
+    local ok, src = pcall(love.audio.newSource, path, 'static')
     if ok then
       src:setLooping(true)
       Audio.music_src[name] = src
     end
+  end
+end
+
+function Audio.set_music_on(enabled)
+  Audio.music_on = not not enabled
+  if Audio.current then
+    if Audio.music_on then
+      Audio.current:setVolume(Audio.music_volume)
+      if not Audio.current:isPlaying() then
+        pcall(Audio.current.play, Audio.current)
+      end
+    else
+      Audio.current:setVolume(0)
+      pcall(Audio.current.stop, Audio.current)
+    end
+  end
+end
+
+function Audio.set_sfx_on(enabled)
+  Audio.sfx_on = not not enabled
+end
+
+function Audio.unlock()
+  if Audio.music_on and Audio.current and not Audio.current:isPlaying() then
+    Audio.current:setVolume(Audio.music_volume)
+    pcall(Audio.current.play, Audio.current)
   end
 end
 
@@ -59,12 +89,15 @@ function Audio.play(name, volume, pitch)
   if not base then
     return
   end
-  local src = base:clone()
+  local ok, src = pcall(base.clone, base)
+  if not ok or not src then
+    return
+  end
   src:setVolume(Audio.sfx_volume * (volume or 1))
   if pitch then
     src:setPitch(pitch)
   end
-  src:play()
+  pcall(src.play, src)
   Audio.active[#Audio.active + 1] = src
   if #Audio.active > 48 then
     table.remove(Audio.active, 1)
@@ -73,20 +106,24 @@ end
 
 function Audio.music(name)
   if Audio.current_name == name then
-    if Audio.current and not Audio.current:isPlaying() then
-      Audio.current:setVolume(Audio.music_on and Audio.music_volume or 0)
-      Audio.current:play()
+    if Audio.current and Audio.music_on and not Audio.current:isPlaying() then
+      Audio.current:setVolume(Audio.music_volume)
+      pcall(Audio.current.play, Audio.current)
     end
     return
   end
   if Audio.current then
-    Audio.current:stop()
+    pcall(Audio.current.stop, Audio.current)
   end
   Audio.current_name = name
   Audio.current = Audio.music_src[name]
   if Audio.current then
-    Audio.current:setVolume(Audio.music_on and Audio.music_volume or 0)
-    Audio.current:play()
+    if Audio.music_on then
+      Audio.current:setVolume(Audio.music_volume)
+      pcall(Audio.current.play, Audio.current)
+    else
+      Audio.current:setVolume(0)
+    end
   end
 end
 

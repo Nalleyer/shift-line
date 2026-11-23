@@ -13,12 +13,30 @@ local function assert_true(v, msg)
 end
 
 local function list_lua_files(dir)
-  local p = assert(io.popen("find '" .. dir .. "' -type f -name '*.lua' | sort"))
+  local is_win = package.config:sub(1, 1) == '\\'
+  local cmd
+  if is_win then
+    local win_dir = dir:gsub('/', '\\')
+    cmd = 'cmd /c dir /s /b "' .. win_dir .. '\\*.lua" 2>nul'
+  else
+    cmd = "find '" .. dir .. "' -type f -name '*.lua' | sort"
+  end
+  local p = assert(io.popen(cmd))
   local out = {}
   for line in p:lines() do
-    out[#out + 1] = line
+    line = line:gsub('\r$', '')
+    if is_win then
+      line = line:gsub('\\', '/')
+      local rel = line:match('(' .. dir:gsub('([%-%.%+%[%]%(%)%$%^%%%?%*])', '%%%1') .. '/.+)$')
+      if rel then
+        out[#out + 1] = rel
+      end
+    else
+      out[#out + 1] = line
+    end
   end
   p:close()
+  table.sort(out)
   return out
 end
 

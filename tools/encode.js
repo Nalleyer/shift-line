@@ -60,6 +60,33 @@ function encodePNG(canvas) {
   ]);
 }
 
+/**
+ * Encode one or more PNG buffers ({w, h, png}) into a Windows ICO buffer.
+ */
+function encodeICO(entries) {
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(0, 0); // reserved
+  header.writeUInt16LE(1, 2); // type: 1 = ICO
+  header.writeUInt16LE(entries.length, 4);
+
+  const dir = Buffer.alloc(entries.length * 16);
+  let offset = 6 + entries.length * 16;
+  entries.forEach((e, i) => {
+    const base = i * 16;
+    dir[base + 0] = e.w >= 256 ? 0 : e.w;
+    dir[base + 1] = e.h >= 256 ? 0 : e.h;
+    dir[base + 2] = 0; // palette colors
+    dir[base + 3] = 0; // reserved
+    dir.writeUInt16LE(1, base + 4); // color planes
+    dir.writeUInt16LE(32, base + 6); // bits per pixel
+    dir.writeUInt32LE(e.png.length, base + 8);
+    dir.writeUInt32LE(offset, base + 12);
+    offset += e.png.length;
+  });
+
+  return Buffer.concat([header, dir, ...entries.map((e) => e.png)]);
+}
+
 /* ------------------------------------------------------------------ */
 /* Canvas                                                              */
 /* ------------------------------------------------------------------ */
@@ -134,4 +161,4 @@ function encodeWAV(samples, sr = SAMPLE_RATE) {
   return buf;
 }
 
-module.exports = { encodePNG, encodeWAV, Canvas, SAMPLE_RATE };
+module.exports = { encodePNG, encodeICO, encodeWAV, Canvas, SAMPLE_RATE };

@@ -12,6 +12,8 @@ local Text = Ui.text
 local Screen = { t = 0, menu = nil }
 
 local function build_targets()
+  local music_on = Audio.music_on ~= false
+  local sfx_on = Audio.sfx_on ~= false
   return {
     {
       id = 'zh',
@@ -30,6 +32,22 @@ local function build_targets()
       sound = 'ui_select',
     },
     {
+      id = 'music',
+      label = I18n.t(music_on and 'settings.music_on' or 'settings.music_off'),
+      icon = 'music',
+      color = music_on and C.green or C.dim,
+      active = music_on,
+      sound = 'ui_select',
+    },
+    {
+      id = 'sfx',
+      label = I18n.t(sfx_on and 'settings.sfx_on' or 'settings.sfx_off'),
+      icon = 'sfx',
+      color = sfx_on and C.green or C.dim,
+      active = sfx_on,
+      sound = 'ui_select',
+    },
+    {
       id = 'back',
       label = I18n.t('common.back'),
       icon = 'arrowL',
@@ -42,12 +60,20 @@ end
 function Screen:enter()
   self.t = 0
   self.menu = Ui.duel_menu.new({
+    col_x = { 80, 136, 192, 248, 304 },
     y_enemy = 132,
     y_player = 188,
     default_col = I18n.locale == 'zh' and 1 or 2,
     on_select = function(target)
       if target.id == 'back' then
         App.go('title')
+      elseif target.id == 'music' then
+        Settings.toggle_music()
+      elseif target.id == 'sfx' then
+        Settings.toggle_sfx()
+        if Audio.sfx_on then
+          Audio.play('ui_select')
+        end
       else
         self:choose(target.id)
       end

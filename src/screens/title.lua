@@ -17,12 +17,22 @@ local Title = {
 
 local CHECK = { x = 14, y = 256 }
 
+local function is_web()
+  return type(love) == 'table'
+    and love.system
+    and type(love.system.getOS) == 'function'
+    and love.system.getOS() == 'Web'
+end
+
 local function build_targets()
-  return {
+  local targets = {
     { id = 'settings', label = I18n.t('title.settings'), icon = 'gear', color = C.blue, sound = 'ui_select' },
     { id = 'start', label = I18n.t('title.start'), icon = 'attack', color = C.amber, sound = 'fight' },
-    { id = 'quit', label = I18n.t('title.quit'), icon = 'x', color = C.red, sound = 'ui_move' },
   }
+  if not is_web() then
+    targets[#targets + 1] = { id = 'quit', label = I18n.t('title.quit'), icon = 'x', color = C.red, sound = 'ui_move' }
+  end
+  return targets
 end
 
 function Title:activate(id)
@@ -30,7 +40,7 @@ function Title:activate(id)
     App.start_run(App.chosen_seed())
   elseif id == 'settings' then
     App.go('settings')
-  elseif id == 'quit' then
+  elseif id == 'quit' and not is_web() then
     love.event.quit()
   end
 end
@@ -39,7 +49,9 @@ function Title:enter()
   self.t = 0
   self.editing = false
   self.blink = 0
+  local web = is_web()
   self.menu = Ui.duel_menu.new({
+    col_x = web and { 132, 252 } or nil,
     y_enemy = 152,
     y_player = 204,
     default_col = 2,
@@ -99,7 +111,7 @@ function Title:keypressed(key)
     return
   end
 
-  if key == 'escape' then
+  if key == 'escape' and not is_web() then
     love.event.quit()
   end
 end

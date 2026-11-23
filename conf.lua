@@ -4,6 +4,7 @@ function love.conf(t)
   t.version = '11.4'
   t.console = false
   t.window.title = 'SHIFTLINE'
+  t.window.icon = 'assets/icon.png'
   t.window.width = 384 * 3
   t.window.height = 288 * 3
   t.window.minwidth = 384

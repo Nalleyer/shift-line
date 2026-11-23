@@ -8,7 +8,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { encodePNG, Canvas } = require('./encode');
+const { encodePNG, encodeICO, Canvas } = require('./encode');
 
 const ROOT = path.resolve(__dirname, '..');
 const A = (p) => path.join(ROOT, p);
@@ -907,6 +907,14 @@ ICONS.push(
   {
     key: 'lang_en',
     rows: ['.######.', '.##.....', '.##.....', '.#####..', '.##.....', '.##.....', '.######.', '........'],
+  },
+  {
+    key: 'music',
+    rows: ['...#####', '...#...#', '...#####', '...#...#', '.###...#', '.###.###', '..##.###', '......##'],
+  },
+  {
+    key: 'sfx',
+    rows: ['...#....', '..##..#.', '####...#', '####.#.#', '####...#', '..##..#.', '...#....', '........'],
   }
 );
 
@@ -931,9 +939,76 @@ const unitsSheet = buildSheet(UNITS, 16, 16, 8);
 const iconsSheet = buildSheet(ICONS, 8, 8, 8);
 const fontSheet = buildFont();
 
+/* ================================================================== */
+/* 5. APP ICON — 32x32 pixel-art crest scaled cleanly for PNG & ICO   */
+/* ================================================================== */
+function buildAppIcon(px) {
+  const S = 32;
+  const cv = new Canvas(S * px, S * px);
+  const ink = [11, 14, 20];
+  const shade = [18, 26, 35];
+  const panel = [24, 35, 45];
+  const line = [44, 64, 83];
+  const amber = [255, 196, 83];
+  const red = [255, 77, 71];
+  const redDk = [142, 34, 38];
+  const white = [242, 247, 252];
+
+  const r = (x, y, w, h, col, a = 255) => cv.rect(x * px, y * px, w * px, h * px, col, a);
+
+  // Dark beveled background tile
+  r(0, 0, S, S, ink);
+  r(1, 1, S - 2, S - 2, shade);
+  r(2, 2, S - 4, S - 4, ink);
+
+  // Subtle tactical grid lines
+  for (let gx = 6; gx <= 26; gx += 10) r(gx, 3, 1, 26, panel);
+  r(3, 11, 26, 1, panel);
+
+  // Outer tactical frame + amber corner ticks
+  r(1, 1, S - 2, 1, line);
+  r(1, S - 2, S - 2, 1, line);
+  r(1, 1, 1, S - 2, line);
+  r(S - 2, 1, 1, S - 2, line);
+  // Corner highlights
+  r(1, 1, 4, 1, amber); r(1, 1, 1, 4, amber);
+  r(S - 5, 1, 4, 1, amber); r(S - 2, 1, 1, 4, amber);
+  r(1, S - 2, 4, 1, amber); r(1, S - 5, 1, 4, amber);
+  r(S - 5, S - 2, 4, 1, amber); r(S - 2, S - 5, 1, 4, amber);
+
+  // Iconic SHIFTLINE horizontal bar with red sliding notch
+  r(4, 24, 24, 2, amber);
+  r(13, 23, 6, 4, ink);
+  r(14, 24, 4, 2, red);
+
+  // Side shift chevrons (< and >)
+  const leftChev = ['..#', '.#.', '#..', '.#.', '..#'];
+  const rightChev = ['#..', '.#.', '..#', '.#.', '#..'];
+  cv.mask(3 * px, 13 * px, leftChev, amber, 255, px);
+  cv.mask(26 * px, 13 * px, rightChev, amber, 255, px);
+
+  // Swordsman ('S') silhouette centered with crisp red_dk drop shadow
+  const swordsman = UNITS[0].rows;
+  cv.mask(9 * px, 7 * px, swordsman, redDk, 255, px);
+  cv.mask(8 * px, 6 * px, swordsman, white, 255, px);
+
+  return cv;
+}
+
+const icon32 = encodePNG(buildAppIcon(1));
+const icon64 = encodePNG(buildAppIcon(2));
+const icon256 = encodePNG(buildAppIcon(8));
+const iconIco = encodeICO([
+  { w: 32, h: 32, png: icon32 },
+  { w: 64, h: 64, png: icon64 },
+  { w: 256, h: 256, png: icon256 },
+]);
+
 fs.writeFileSync(A('assets/units.png'), encodePNG(unitsSheet.canvas));
 fs.writeFileSync(A('assets/icons.png'), encodePNG(iconsSheet.canvas));
 fs.writeFileSync(A('assets/font.png'), encodePNG(fontSheet.canvas));
+fs.writeFileSync(A('assets/icon.png'), icon256);
+fs.writeFileSync(A('assets/icon.ico'), iconIco);
 
 /* --- Lua maps so the game and the generator can never drift apart --- */
 const luaStr = (s) => JSON.stringify(s);

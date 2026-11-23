@@ -64,6 +64,9 @@ function love.draw()
 end
 
 function love.keypressed(key)
+  if Audio.unlock then
+    Audio.unlock()
+  end
   if key == 'f11' then
     love.window.setFullscreen(not love.window.getFullscreen(), 'desktop')
     Viewport.recompute()
@@ -78,6 +81,9 @@ function love.mousemoved(x, y)
 end
 
 function love.mousepressed(x, y, button)
+  if Audio.unlock then
+    Audio.unlock()
+  end
   local cx, cy = Viewport.to_canvas(x, y)
   App.mousepressed(cx, cy, button)
 end

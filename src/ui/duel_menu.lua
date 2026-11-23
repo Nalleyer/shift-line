@@ -31,7 +31,9 @@ end
 
 function DuelMenu:target_rect(i)
   local cx = self.col_x[i]
-  return { x = cx - 32, y = self.y_enemy - 14, w = 64, h = 42 }
+  local step = (#self.col_x >= 2) and math.abs(self.col_x[2] - self.col_x[1]) or 64
+  local half_w = math.min(32, math.floor(step / 2))
+  return { x = cx - half_w, y = self.y_enemy - 14, w = half_w * 2, h = 42 }
 end
 
 function DuelMenu:shift_left_rect()
