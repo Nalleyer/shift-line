@@ -1,0 +1,12 @@
+# Local runtime / Nix cache
+.cache/
+
+# Release packaging output
+dist/
+*.love
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*~
