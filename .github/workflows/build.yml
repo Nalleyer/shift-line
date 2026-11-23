@@ -83,9 +83,16 @@ jobs:
             --set-version-string ProductName "$env:GAME_NAME" `
             --set-version-string FileDescription "$env:GAME_NAME"
 
-          # Fuse modified love.exe + shift-line.love -> SHIFTLINE.exe
-          cmd /c copy /b "build\love-icon.exe" + "dist\$env:SLUG.love" "$stage\$env:GAME_NAME.exe"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Fuse modified love.exe + shift-line.love -> SHIFTLINE.exe (binary concat)
+          $exeBytes = [System.IO.File]::ReadAllBytes("build/love-icon.exe")
+          $loveBytes = [System.IO.File]::ReadAllBytes("dist/$env:SLUG.love")
+          $out = [System.IO.File]::Create("$stage/$env:GAME_NAME.exe")
+          try {
+            $out.Write($exeBytes, 0, $exeBytes.Length)
+            $out.Write($loveBytes, 0, $loveBytes.Length)
+          } finally {
+            $out.Dispose()
+          }
 
           Compress-Archive -Path "$stage\*" -DestinationPath "dist/$env:SLUG-windows-x64.zip" -Force
 
