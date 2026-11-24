@@ -121,11 +121,15 @@ local dynamic_referenced = {
   ['shop.node_threats'] = true, ['shop.node_threat_none'] = true, ['shop.node_cleared'] = true,
   ['shop.node_act'] = true, ['shop.node_wave'] = true, ['shop.node_boss'] = true, ['shop.node_title'] = true,
   ['shop.fuse_ready'] = true, ['shop.fuse_spent'] = true,
+  ['shop.draft_slot_trait'] = true, ['shop.draft_slot_relic'] = true,
+  ['shop.draft_slot_recruit'] = true, ['shop.draft_slot_upgrade'] = true,
+  ['shop.draft_slot_gold'] = true,
   ['offer.recruit'] = true, ['offer.recruit_title'] = true, ['offer.recruit_stats'] = true,
   ['offer.sharp'] = true, ['offer.sharp_detail'] = true,
   ['offer.fortify'] = true, ['offer.fortify_detail'] = true,
   ['offer.defense'] = true, ['offer.defense_detail'] = true,
   ['offer.dismiss'] = true, ['offer.dismiss_detail'] = true,
+  ['offer.gold'] = true, ['offer.gold_detail'] = true,
   ['offer.swap'] = true, ['offer.swap_detail'] = true, ['offer.swap_free'] = true, ['offer.swap_free_detail'] = true,
 }
 for id in pairs(Traits.definitions) do

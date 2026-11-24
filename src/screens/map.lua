@@ -47,7 +47,7 @@ local function col_x(col, total_cols)
 end
 
 local function node_y(n)
-  if n.fork and n.branch == 2 then
+  if (n.fork or n.kind == 'draft') and n.branch == 2 then
     return Y_BOT
   end
   if n.fork or (n.kind == 'camp' and n.branch == 1) then
@@ -93,7 +93,7 @@ function Map:is_node_active(n)
     return false
   end
   if self.run.phase == 'camp' and not self.from_camp then
-    return n.kind == 'camp'
+    return n.kind == (self.run:is_draft() and 'draft' or 'camp')
   end
   return n.kind == 'battle' or n.kind == 'boss'
 end
@@ -101,7 +101,7 @@ end
 function Map:is_node_done(n)
   local run = self.run
   local left_camp = self.from_camp or run.phase ~= 'camp'
-  local fork_w = (n.kind == 'camp' and n.branch == 1) and (n.wave - 1) or n.wave
+  local fork_w = ((n.kind == 'camp' and n.branch == 1) or n.kind == 'draft') and (n.wave - 1) or n.wave
   if n.kind == 'camp' and n.branch == 1 then
     if run.wave < n.wave then
       return false
@@ -110,6 +110,12 @@ function Map:is_node_done(n)
       return false
     end
     return run.wave > n.wave or left_camp
+  end
+  if n.kind == 'draft' then
+    if run.wave < n.wave or run:fork_choice(fork_w) ~= 2 then
+      return false
+    end
+    return run.wave > n.wave or left_camp or not run:is_draft()
   end
   if n.fork then
     if n.wave >= run.wave then
@@ -130,6 +136,10 @@ local function is_node_skipped(run, n)
   if n.kind == 'camp' and n.branch == 1 then
     local fork_w = n.wave - 1
     return run.wave > fork_w and run:fork_choice(fork_w) == 2
+  end
+  if n.kind == 'draft' then
+    local fork_w = n.wave - 1
+    return run.wave > fork_w and run:fork_choice(fork_w) ~= 2
   end
   if n.fork and n.wave < run.wave then
     return run:fork_choice(n.wave) ~= n.branch
@@ -184,13 +194,18 @@ function Map:enter(opts)
   self.selected_branch = self.run:fork_choice(self.run.wave)
   self:show_act(self.run:act())
   self.anim_t = 0
-  self.anim_dur = (opts.from_wave or opts.from_camp) and 0.42 or 0
+  self.anim_dur = (opts.from_wave or opts.from_camp or opts.from_draft) and 0.42 or 0
   self.from_pos = nil
 
   local nodes = self.nodes
   local total_cols = act_cols(nodes)
   if opts.from_camp then
     local prev = find_node(nodes, 'camp', self.run.wave)
+    if prev then
+      self.from_pos = { x = col_x(prev.col, total_cols), y = node_y(prev) }
+    end
+  elseif opts.from_draft then
+    local prev = find_node(nodes, 'draft', self.run.wave)
     if prev then
       self.from_pos = { x = col_x(prev.col, total_cols), y = node_y(prev) }
     end
@@ -244,7 +259,7 @@ function Map:activate()
   elseif not self:is_node_active(n) then
     self:show_act(self.run:act())
     Audio.play('ui_move')
-  elseif n.kind == 'camp' then
+  elseif n.kind == 'camp' or n.kind == 'draft' then
     Audio.play('ui_select')
     App.go('camp')
   else
@@ -355,7 +370,7 @@ function Map:mousepressed(x, y, button)
 end
 
 local function inspected_encounter(run, n)
-  if not n or n.kind == 'camp' then
+  if not n or n.kind == 'camp' or n.kind == 'draft' then
     return nil
   end
   if run:has_fork(n.wave) then
@@ -373,7 +388,7 @@ function Map:draw_rails(nodes)
   end
 
   local by_col = {}
-  local f_top, f_bot, camp_top
+  local f_top, f_bot, camp_top, draft_bot
   for _, n in ipairs(nodes) do
     if n.fork then
       if n.branch == 2 then
@@ -383,6 +398,8 @@ function Map:draw_rails(nodes)
       end
     elseif n.kind == 'camp' and n.branch == 1 then
       camp_top = n
+    elseif n.kind == 'draft' then
+      draft_bot = n
     else
       by_col[n.col] = n
     end
@@ -445,12 +462,12 @@ function Map:draw_rails(nodes)
   local bot_done = self:is_node_done(f_bot) and (self:is_node_done(post_fork) or self:is_node_active(post_fork))
   local bot_col = bot_done and C.green or (bot_active and C.amber or C.red)
   local bot_alpha = is_node_skipped(run, f_bot) and 0.18 or (bot_done and 0.9 or 0.65)
-  rail_segment(xof(f_bot), node_y(f_bot), xof(post_fork), node_y(post_fork), bot_col, bot_done or bot_active, bot_alpha)
-  Text.text(tr('gauntlet_tag'), math.floor((xof(f_bot) + xof(post_fork)) / 2), Y_BOT + 7, {
-    align = 'center',
-    color = is_node_skipped(run, f_bot) and C.dim or C.red,
-    alpha = bot_alpha,
-  })
+  if draft_bot then
+    link(f_bot, draft_bot, self:is_node_done(f_bot) and C.green or (bot_active and C.amber or C.red), bot_alpha)
+    link(draft_bot, post_fork, bot_done and C.green or (self:is_node_active(draft_bot) and C.amber or C.red), bot_alpha)
+  else
+    rail_segment(xof(f_bot), node_y(f_bot), xof(post_fork), node_y(post_fork), bot_col, bot_done or bot_active, bot_alpha)
+  end
 
   for c = post_fork.col, total_cols - 1 do
     link(by_col[c], by_col[c + 1])
@@ -476,6 +493,8 @@ function Map:draw_nodes(nodes)
       fill = Ui.mix(C.shade, C.amber, 0.16 + 0.08 * math.sin(self.t * 5))
     elseif n.kind == 'camp' then
       fill = Ui.mix(C.shade, C.blue, 0.10)
+    elseif n.kind == 'draft' then
+      fill = Ui.mix(C.shade, C.amber, 0.12)
     elseif n.kind == 'boss' or n.gauntlet then
       fill = Ui.mix(C.shade, C.red, 0.12)
     end
@@ -484,7 +503,7 @@ function Map:draw_nodes(nodes)
     local border = (hot or is_insp) and C.white
       or is_sel and C.amber
       or done and C.green
-      or (n.kind == 'camp' and C.blue or (n.kind == 'boss' or n.gauntlet) and C.red or C.line)
+      or (n.kind == 'camp' and C.blue or (n.kind == 'draft' and C.amber) or (n.kind == 'boss' or n.gauntlet) and C.red or C.line)
 
     Ui.rect(r.x, r.y, r.w, r.h, fill, alpha)
     Ui.frame(r.x, r.y, r.w, r.h, border, alpha)
@@ -493,22 +512,17 @@ function Map:draw_nodes(nodes)
     end
 
     local icon_col = done and C.green
-      or (is_sel and C.white or (n.kind == 'camp' and C.blue or (n.kind == 'boss' or n.gauntlet) and C.red or C.paper))
+      or (is_sel and C.white or (n.kind == 'camp' and C.blue or (n.kind == 'draft' and C.amber) or (n.kind == 'boss' or n.gauntlet) and C.red or C.paper))
     if n.kind == 'camp' then
       Ui.icon('gear', r.cx, r.cy, 1, icon_col, alpha)
+    elseif n.kind == 'draft' then
+      Ui.icon('star', r.cx, r.cy, 1, icon_col, alpha)
     elseif n.kind == 'boss' then
       Ui.unit(n.wave == #Encounters.WAVES and 'c' or 'b', r.cx, r.cy, 1, done and C.green or C.red, alpha)
     elseif n.gauntlet then
       Ui.icon('dragon_breath', r.cx, r.cy, 1, icon_col, alpha)
     else
       Ui.icon('sword_sides', r.cx, r.cy, 1, icon_col, alpha)
-    end
-
-    if n.gauntlet and not skipped then
-      local _, alt = run:fork_pair(n.wave)
-      local bg = alt and alt.bonus_gold or 5
-      Ui.icon('coin', r.cx - 8, r.y + r.h + 6, 1, C.amber, alpha)
-      Text.text('+' .. bg, r.cx - 1, r.y + r.h + 2, { bitmap = true, color = C.amber, alpha = alpha })
     end
   end
 
@@ -540,6 +554,7 @@ function Map:draw_legend()
     { icon = 'sword_sides', col = C.paper, key = 'legend_battle' },
     { icon = 'gear', col = C.blue, key = 'legend_camp' },
     { icon = 'dragon_breath', col = C.red, key = 'legend_gauntlet' },
+    { icon = 'star', col = C.amber, key = 'legend_draft' },
   }
   local x = 14
   local y = 140
@@ -584,10 +599,12 @@ function Map:draw_intel()
 
   local w = n.wave
   local is_camp = n.kind == 'camp'
+  local is_draft = n.kind == 'draft'
+  local is_non_battle = is_camp or is_draft
   local is_boss = n.kind == 'boss'
   local done = self:is_node_done(n)
-  local enc = (not is_camp) and inspected_encounter(run, n) or nil
-  local show_exact = (not is_camp) and ((w <= run.wave + 1) or is_boss)
+  local enc = (not is_non_battle) and inspected_encounter(run, n) or nil
+  local show_exact = (not is_non_battle) and ((w <= run.wave + 1) or is_boss)
   local shared_hp = type(enc) == 'table' and enc.boss and (enc.boss_hp or 14)
 
   if is_camp then
@@ -597,23 +614,31 @@ function Map:draw_intel()
       Text.text(badge, 280, INTEL_TITLE_Y, { align = 'right', color = C.green })
     end
     Text.fit_text(n.branch == 1 and tr('camp_top_note') or tr('camp_sub'), 14, INTEL_SUB_Y, 264, { color = C.dim })
+  elseif is_draft then
+    local _, alt = run:fork_pair(w - 1)
+    Text.fit_text(tr('draft_title', w), 14, INTEL_TITLE_Y, 174, { color = C.amber })
+    local badge = done and I18n.t('shop.node_cleared') or (self:is_node_active(n) and tr('next_stop') or '')
+    if badge ~= '' then
+      Text.text(badge, 280, INTEL_TITLE_Y, { align = 'right', color = C.green })
+    end
+    Text.wrap_text(tr('draft_sub', I18n.draft_preview(alt)), 14, INTEL_SUB_Y, 264, { color = C.amber, max_lines = 2 })
   else
     local title_key = is_boss and (w == #Encounters.WAVES and 'node_finalboss' or 'node_miniboss')
       or (n.fork and (n.branch == 2 and 'node_bounty' or 'node_std') or 'node_battle')
-    Text.fit_text(I18n.t('shop.' .. title_key, w), 14, INTEL_TITLE_Y, 174, {
+    Text.fit_text(I18n.t('shop.' .. title_key, w), 14, INTEL_TITLE_Y, 150, {
       color = is_boss and C.red or C.amber,
     })
 
     local badge, bcol = '', C.dim
     if done then
       badge, bcol = I18n.t('shop.node_cleared'), C.green
-    elseif n.gauntlet and enc and enc.bonus_gold then
-      badge, bcol = tr('gauntlet_badge', enc.bonus_gold), C.amber
+    elseif n.gauntlet and enc then
+      badge, bcol = tr('gauntlet_badge'), C.amber
     elseif self:is_node_active(n) then
       badge, bcol = tr('next_stop'), C.green
     end
     if badge ~= '' then
-      Text.text(badge, 280, INTEL_TITLE_Y, { align = 'right', color = bcol })
+      Text.fit_text(badge, 280, INTEL_TITLE_Y, 124, { align = 'right', color = bcol })
     end
 
     local threats = enc and Encounter.threats(enc) or {}
@@ -661,19 +686,19 @@ function Map:draw_intel()
     end
   end
 
-  local enemies = (not is_camp and not done and enc) and Encounter.parse_enemies(enc) or {}
+  local enemies = (not is_non_battle and not done and enc) and Encounter.parse_enemies(enc) or {}
   for i = 1, Constants.SLOTS do
     local sx = 14 + (i - 1) * 45
     local cx = sx + 20
     local e = enemies[i]
     local u = run.roster[i]
-    if not is_camp and not done then
+    if not is_non_battle and not done then
       draw_unit_cell(sx, INTEL_ENEMY_Y, 41, INTEL_CELL_H, e, 'enemy', {
         hidden = e and not show_exact,
         tip = { relics = run.relics },
       })
     end
-    local pair = (not is_camp and not done) and e and u
+    local pair = (not is_non_battle and not done) and e and u
     Ui.vline(cx, INTEL_ENEMY_Y + INTEL_CELL_H, 2, pair and C.amber or C.line, pair and 0.85 or 0.35)
     draw_unit_cell(sx, INTEL_ALLY_Y, 41, INTEL_CELL_H, u, 'ally', {
       tip = { line = run.roster, col = i, relics = run.relics },
@@ -698,11 +723,16 @@ function Map:draw_action_panel()
   elseif n.kind == 'camp' then
     Text.fit_text(tr('action_camp', run.wave), 296, 174, 74, { color = C.blue })
     label_key = 'enter_camp'
+  elseif n.kind == 'draft' then
+    local _, alt = run:fork_pair(run.wave - 1)
+    Text.fit_text(tr('action_draft'), 296, 168, 74, { color = C.amber })
+    Text.wrap_text(I18n.draft_preview(alt), 296, 182, 74, { color = C.paper, max_lines = 3 })
+    label_key = 'enter_draft'
   elseif n.gauntlet then
     local _, alt = run:fork_pair(run.wave)
-    Text.wrap_text(tr('action_gauntlet', alt and alt.bonus_gold or 5), 296, 173, 74, {
+    Text.wrap_text(tr('action_gauntlet', I18n.draft_preview(alt)), 296, 173, 74, {
       color = C.amber,
-      max_lines = 3,
+      max_lines = 4,
     })
     label_key = 'enter_gauntlet'
   else

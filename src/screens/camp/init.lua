@@ -15,8 +15,9 @@ local Text = Ui.text
 local Screen = { t = 0 }
 
 function Screen:ui_context()
+  local is_draft = self.run and self.run:is_draft()
   return {
-    can_use_actives = (self.step == 'choose') and not self.leave_confirm,
+    can_use_actives = (self.step == 'choose') and not self.leave_confirm and not is_draft,
     active_block_reason = self.step ~= 'choose' and 'shop_busy' or nil,
     allow_inspect = not self.leave_confirm,
     inspect_preview_only = (self.step ~= 'choose'),
@@ -53,7 +54,12 @@ function Screen:leave() end
 
 function Screen:finish()
   if self.step == 'choose' then
-    App.go('map', { from_camp = true })
+    if self.run:is_draft() then
+      self.run:finish_node()
+      App.go('map', { from_draft = true })
+    else
+      App.go('map', { from_camp = true })
+    end
   end
 end
 
@@ -114,6 +120,9 @@ function Screen:confirm()
     self.target = nil
     self.swap_from = nil
     Audio.play('ui_select')
+    if self.run:is_draft() then
+      self:finish()
+    end
   else
     Audio.play('ui_deny')
   end
@@ -232,12 +241,20 @@ function Screen:mousepressed(x, y, button)
       App.go('map', { peek = true })
       return
     end
-    for i, rect in ipairs(Cards.offer_rects(self.run:node_offers())) do
+    local is_draft = self.run:is_draft()
+    for i, rect in ipairs(Cards.offer_rects(self.run:node_offers(), is_draft)) do
       if Ui.hit(rect, x, y) then
         self.sel = i
         self:confirm()
         return
       end
+    end
+    if is_draft then
+      if Ui.hit(Views.LEAVE_BTN, x, y) then
+        Audio.play('ui_select', 0.7)
+        self:finish()
+      end
+      return
     end
     if Ui.hit(Views.REROLL_BTN, x, y) then
       if self.run:use_charge('reroll') then

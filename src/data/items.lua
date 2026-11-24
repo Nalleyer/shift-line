@@ -6,7 +6,7 @@ local RELICS = {
     description = '+1 ATK for all allies in round 1.',
     icon = 'whetstone',
     rarity = 'common',
-    price = 4,
+    price = 5,
     max_stacks = 2,
   },
   padding = {
@@ -15,7 +15,7 @@ local RELICS = {
     description = '+1 DEF for all allies in round 1.',
     icon = 'padding',
     rarity = 'common',
-    price = 3,
+    price = 4,
     max_stacks = 2,
   },
   far_lens = {
@@ -24,7 +24,7 @@ local RELICS = {
     description = 'Guard, Heal, and Charge auras also reach allies 2 slots away.',
     icon = 'far_lens',
     rarity = 'rare',
-    price = 5,
+    price = 6,
     max_stacks = 1,
   },
   compensation = {
@@ -33,7 +33,7 @@ local RELICS = {
     description = 'Block the first core breach each battle.',
     icon = 'compensation',
     rarity = 'rare',
-    price = 5,
+    price = 6,
     max_stacks = 2,
   },
   insurance = {
@@ -42,7 +42,7 @@ local RELICS = {
     description = 'Once per battle, survive a lethal hit at 1 HP.',
     icon = 'insurance',
     rarity = 'epic',
-    price = 7,
+    price = 8,
     max_stacks = 2,
   },
   bounty = {
@@ -51,8 +51,8 @@ local RELICS = {
     description = '+1 extra gold for every enemy slain.',
     icon = 'bounty',
     rarity = 'rare',
-    price = 6,
-    max_stacks = 2,
+    price = 7,
+    max_stacks = 1,
   },
   field_rations = {
     name = 'FIELD RATIONS',
@@ -60,7 +60,7 @@ local RELICS = {
     description = 'Survivors heal +1 extra HP after victory.',
     icon = 'field_rations',
     rarity = 'common',
-    price = 3,
+    price = 4,
     max_stacks = 1,
   },
   navigator = {
@@ -69,7 +69,7 @@ local RELICS = {
     description = 'Between rounds, shift the line up to 3 slots either way.',
     icon = 'navigator',
     rarity = 'legendary',
-    price = 9,
+    price = 13,
     max_stacks = 1,
   },
 }

@@ -346,4 +346,15 @@ assert_true(Battle.command(buff_b, { type = 'item', index = 1, target = 1 }), 'g
 assert_true(Battle.command(buff_b, { type = 'item', index = 1, from = 1, to = 2 }), 'swap kit swaps slot 1 & 2')
 assert_eq(buff_b.line[2].kind, 'S', 'S moved to slot 2 via swap_kit')
 
+-- 9. Navigator zero-net-shift does not trigger Momentum
+local nav_b = Battle.new(
+  { [1] = make_unit('V') },
+  'b.....', 0, 8,
+  { relics = { 'navigator' } }
+)
+assert_true(Battle.command(nav_b, { type = 'navigator_shift', delta = 1 }), 'navigator shifts +1')
+assert_true(nav_b.shifted_this_round, 'net non-zero navigator shift activates shifted_this_round')
+assert_true(Battle.command(nav_b, { type = 'navigator_shift', delta = -1 }), 'navigator shifts -1 back to origin')
+assert_true(not nav_b.shifted_this_round, 'returning to zero net navigator delta clears shifted_this_round')
+
 print('combat_test.lua: ALL PASSED')

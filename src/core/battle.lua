@@ -100,6 +100,7 @@ function Battle.new(roster, enc, offset, core, opts)
     charge_earned = 0,
     charge_spent = 0,
     shifted_this_round = false,
+    non_nav_shifted = false,
     pressure = 0,
     round_no = 0,
     events = {},
@@ -319,6 +320,7 @@ local function resolve_player_attacks(s, enemy_guards)
     end
   end
   s.shifted_this_round = false
+  s.non_nav_shifted = false
 end
 
 local function resolve_breach(s, col, enemy, escape)
@@ -458,6 +460,7 @@ local function try_intercept(s, col, amount, used_interceptors, occupied, guards
     s.line[col] = interceptor
     s.line[best] = nil
     s.shifted_this_round = true
+    s.non_nav_shifted = true
     emit_reposition(s, 'INTERCEPT', delta)
   end
   snapshot_player_defenses(s, occupied, guards)
@@ -534,6 +537,7 @@ local function resolve_unit_motions(s)
       s.line[i + 1] = unit
       s.line[i] = nil
       s.shifted_this_round = true
+      s.non_nav_shifted = true
       emit_reposition(s, 'RIDER', 1)
     end
   end
@@ -544,6 +548,7 @@ local function resolve_unit_motions(s)
       s.line[i - 1] = unit
       s.line[i] = nil
       s.shifted_this_round = true
+      s.non_nav_shifted = true
       emit_reposition(s, 'PIKEMAN', -1)
     end
   end
@@ -742,6 +747,7 @@ local function handle_shift_modal(s, cmd, typ)
       table.remove(s.inventory, m.index)
       s.items_used[#s.items_used + 1] = m.id
       s.shifted_this_round = true
+      s.non_nav_shifted = true
       emit(s, { type = 'item', id = m.id, name = Items.ACTIVES[m.id].name })
     end
     s.shift_moves = nil
@@ -798,6 +804,7 @@ local function handle_item(s, cmd)
     end
     s.line[cmd.from], s.line[cmd.to] = s.line[cmd.to], s.line[cmd.from]
     s.shifted_this_round = true
+    s.non_nav_shifted = true
     emit_reposition(s, item.name)
   else
     local col = cmd.target
@@ -872,7 +879,12 @@ function Battle.command(s, cmd)
     end
     local label = typ == 'navigator_shift' and 'NAVIGATOR' or 'BOSS SHIFT'
     s.line = Util.shift_line(s.line, delta)
-    s.shifted_this_round = true
+    if typ == 'navigator_shift' then
+      s.shifted_this_round = s.non_nav_shifted or ((s.navigator_delta or 0) ~= 0)
+    else
+      s.shifted_this_round = true
+      s.non_nav_shifted = true
+    end
     emit_reposition(s, label, delta)
     ok = true
   elseif typ == 'charge_shift' then
@@ -884,6 +896,7 @@ function Battle.command(s, cmd)
     s.charge_spent = (s.charge_spent or 0) + 1
     s.line = Util.shift_line(s.line, delta)
     s.shifted_this_round = true
+    s.non_nav_shifted = true
     emit(s, { type = 'charge', delta = -1, charge = s.charge })
     emit_reposition(s, 'CHARGE SHIFT', delta)
     ok = true

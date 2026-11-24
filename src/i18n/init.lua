@@ -223,6 +223,8 @@ function I18n.offer_title(offer)
     return I18n.t('trait.' .. offer.id .. '.name')
   elseif offer.kind == 'swap' and offer.free then
     return I18n.t('offer.swap_free')
+  elseif offer.kind == 'gold' then
+    return I18n.t('offer.gold', offer.amount or 0)
   elseif offer.kind == 'swap' or offer.kind == 'dismiss' then
     return I18n.t('offer.' .. offer.kind)
   end
@@ -243,10 +245,26 @@ function I18n.offer_detail(offer)
     return I18n.t('trait.' .. offer.id .. '.detail')
   elseif offer.kind == 'swap' and offer.free then
     return I18n.t('offer.swap_free_detail')
+  elseif offer.kind == 'gold' then
+    return I18n.t('offer.gold_detail', offer.amount or 0)
   elseif offer.kind == 'swap' or offer.kind == 'dismiss' then
     return I18n.t('offer.' .. offer.kind .. '_detail')
   end
   return offer.detail or ''
+end
+
+function I18n.draft_preview(fork_enc)
+  local slots = (fork_enc and fork_enc.draft_slots) or { 'trait', 'relic', 'gold' }
+  local gold_amt = (fork_enc and fork_enc.draft_gold) or 6
+  local parts = {}
+  for _, kind in ipairs(slots) do
+    if kind == 'gold' then
+      parts[#parts + 1] = I18n.t('shop.draft_slot_gold', gold_amt)
+    else
+      parts[#parts + 1] = I18n.t('shop.draft_slot_' .. kind)
+    end
+  end
+  return table.concat(parts, '/')
 end
 
 return I18n

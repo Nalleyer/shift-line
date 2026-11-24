@@ -335,6 +335,20 @@ local ok, err = xpcall(function()
       App.draw()
     end
 
+    r:open_draft(3)
+    App.go('camp')
+    App.update(0.1)
+    App.draw()
+    for i = 1, #r:node_offers() do
+      Camp.sel = i
+      Camp:confirm()
+      if Camp.targets and Camp.targets[1] then
+        Camp.target = Camp.targets[1]
+      end
+      App.draw()
+      Camp:keypressed('escape')
+    end
+
     r:open_camp(0, false)
     App.go('camp')
     App.update(0.1)

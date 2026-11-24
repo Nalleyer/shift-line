@@ -99,7 +99,8 @@ function Result:draw()
   end
 
   if fuse_rewound then
-    Text.fit_text(I18n.t('result.fuse_sub'), T.W / 2, NOTES_Y, 340, { align = 'center', color = C.green })
+    local sub_key = run:is_gauntlet_wave() and 'result.fuse_sub_battle' or 'result.fuse_sub'
+    Text.fit_text(I18n.t(sub_key), T.W / 2, NOTES_Y, 340, { align = 'center', color = C.green })
   elseif sum then
     local notes = {}
     if (sum.bonus_core or 0) > 0 then

@@ -9,47 +9,101 @@ local Unit = require('core.unit')
 
 local Camp = {}
 
-local function stock_equipment(run, rng, offers, kind, order, defs, count)
-  local pool = {}
-  for _, id in ipairs(order) do
-    local d = defs[id]
-    local cap_ok = kind ~= 'relic' or not d.max_stacks or Util.relic_count(run.relics, id) < d.max_stacks
-    local rarity_ok = d.rarity ~= 'legendary' or run.wave >= 4
-    local active_ok = kind ~= 'active' or run.wave > 2 or d.effect ~= 'shift'
-    if d and rarity_ok and active_ok and cap_ok then
-      pool[#pool + 1] = id
+local function pick_equipment_id(run, rng, kind, order, defs, pool, exclude)
+  if #pool == 0 then
+    return nil
+  end
+  local groups = {}
+  for _, id in ipairs(pool) do
+    if not (exclude and exclude[id]) then
+      local tier = defs[id].rarity or 'common'
+      groups[tier] = groups[tier] or {}
+      groups[tier][#groups[tier] + 1] = id
     end
   end
 
-  for _ = 1, count do
-    if #pool == 0 then
+  -- Determine all rarity tiers that exist in this catalog at the current wave,
+  -- regardless of whether the player already maxed out lower-tier items.
+  local eligible_tiers = {}
+  local total = 0
+  for _, tier in ipairs(Constants.RARITY_ORDER) do
+    local tier_exists = false
+    for _, id in ipairs(order) do
+      local d = defs[id]
+      local rarity_ok = d and (d.rarity ~= 'legendary' or run.wave >= 4)
+      local active_ok = kind ~= 'active' or run.wave > 2 or d.effect ~= 'shift'
+      if rarity_ok and active_ok and (d.rarity or 'common') == tier then
+        tier_exists = true
+        break
+      end
+    end
+    if tier_exists then
+      eligible_tiers[#eligible_tiers + 1] = tier
+      total = total + (Constants.RARITY_WEIGHTS[tier] or 58)
+    end
+  end
+  if total <= 0 then
+    return nil
+  end
+
+  local roll = rng:int(1, total)
+  local chosen_idx = 1
+  for idx, tier in ipairs(eligible_tiers) do
+    roll = roll - (Constants.RARITY_WEIGHTS[tier] or 58)
+    if roll <= 0 then
+      chosen_idx = idx
       break
     end
-    local groups = {}
-    local total = 0
-    for _, id in ipairs(pool) do
-      local tier = defs[id].rarity or 'common'
-      if not groups[tier] then
-        groups[tier] = {}
-        total = total + (Constants.RARITY_WEIGHTS[tier] or 58)
-      end
-      groups[tier][#groups[tier] + 1] = id
-    end
+  end
 
-    local roll = rng:int(1, total)
-    local chosen_tier
-    for _, tier in ipairs(Constants.RARITY_ORDER) do
-      if groups[tier] then
-        roll = roll - (Constants.RARITY_WEIGHTS[tier] or 58)
-        if roll <= 0 then
+  local chosen_tier = eligible_tiers[chosen_idx]
+  if not groups[chosen_tier] then
+    -- Fall back downward first so capping common/rare relics never inflates legendary odds.
+    chosen_tier = nil
+    for idx = chosen_idx - 1, 1, -1 do
+      if groups[eligible_tiers[idx]] then
+        chosen_tier = eligible_tiers[idx]
+        break
+      end
+    end
+    if not chosen_tier then
+      -- Only allow stepping up into non-legendary tiers when all lower tiers are exhausted.
+      for idx = chosen_idx + 1, #eligible_tiers do
+        local tier = eligible_tiers[idx]
+        if tier ~= 'legendary' and groups[tier] then
           chosen_tier = tier
           break
         end
       end
     end
+  end
+  if not chosen_tier then
+    return nil
+  end
 
-    local group = groups[chosen_tier]
-    local id = group[rng:int(1, #group)]
+  local group = groups[chosen_tier]
+  return group[rng:int(1, #group)]
+end
+
+local function stock_equipment(run, rng, offers, kind, order, defs, count, opts)
+  opts = opts or {}
+  local pool = {}
+  for _, id in ipairs(order) do
+    local d = defs[id]
+    local cap_ok = kind ~= 'relic' or not d.max_stacks or Util.relic_count(run.relics, id) < d.max_stacks
+    local rarity_ok = d.rarity ~= 'legendary' or (run.wave >= 4 and not opts.no_legendary)
+    local active_ok = kind ~= 'active' or run.wave > 2 or d.effect ~= 'shift'
+    local allowed = not (opts.exclude and opts.exclude[id])
+    if d and rarity_ok and active_ok and cap_ok and allowed then
+      pool[#pool + 1] = id
+    end
+  end
+
+  for _ = 1, count do
+    local id = pick_equipment_id(run, rng, kind, order, defs, pool, opts.exclude)
+    if not id then
+      break
+    end
     for i, v in ipairs(pool) do
       if v == id then
         table.remove(pool, i)
@@ -61,7 +115,8 @@ local function stock_equipment(run, rng, offers, kind, order, defs, count)
     offers[#offers + 1] = {
       kind = kind,
       id = id,
-      price = d.price or 3,
+      price = opts.free and 0 or (d.price or 3),
+      free = opts.free or false,
       title = d.name,
       detail = d.description or d.short,
       available = true,
@@ -160,7 +215,9 @@ function Camp.generate_offers(run, reroll_count, swap_bought)
     end
   end
 
-  stock_equipment(run, rng, offers, 'relic', Items.RELIC_ORDER, Items.RELICS, rng:int(1, 2))
+  if rng:chance(0.65) then
+    stock_equipment(run, rng, offers, 'relic', Items.RELIC_ORDER, Items.RELICS, 1)
+  end
   stock_equipment(run, rng, offers, 'active', Items.ACTIVE_ORDER, Items.ACTIVES, rng:int(1, 2))
 
   if trait_rng:chance(0.55) then
@@ -183,6 +240,127 @@ function Camp.generate_offers(run, reroll_count, swap_bought)
       local d = Traits.shop[id]
       add({ kind = 'trait', id = id, rarity = d.rarity, price = d.price, title = 'TRAIT', detail = 'TEACH ONE UNIT' })
     end
+  end
+
+  return offers
+end
+
+local function make_draft_upgrade(run, rng, used_modes)
+  local modes = {}
+  for _, mode in ipairs({ 'atk', 'hp', 'def' }) do
+    if not (used_modes and used_modes[mode]) and #Camp.offer_targets(run, { kind = 'upgrade', mode = mode }) > 0 then
+      modes[#modes + 1] = mode
+    end
+  end
+  if #modes == 0 then
+    return nil
+  end
+  local mode = modes[rng:int(1, #modes)]
+  if used_modes then
+    used_modes[mode] = true
+  end
+  return { kind = 'upgrade', mode = mode, price = 0, free = true, title = 'UPGRADE', detail = 'IMPROVE A UNIT', available = true }
+end
+
+local function make_draft_trait(run, rng, act)
+  local rare, epic = {}, {}
+  for _, id in ipairs(Traits.shop_order) do
+    local d = Traits.shop[id]
+    if #Camp.offer_targets(run, { kind = 'trait', id = id }) > 0 then
+      if d.rarity == 'epic' then
+        if act >= 2 then
+          epic[#epic + 1] = id
+        end
+      else
+        rare[#rare + 1] = id
+      end
+    end
+  end
+  local pool
+  if act >= 3 and #epic > 0 then
+    pool = epic
+  elseif act == 2 and #epic > 0 and (#rare == 0 or rng:chance(0.45)) then
+    pool = epic
+  else
+    pool = #rare > 0 and rare or epic
+  end
+  if #pool == 0 then
+    return nil
+  end
+  local id = pool[rng:int(1, #pool)]
+  local d = Traits.shop[id]
+  return { kind = 'trait', id = id, rarity = d.rarity, price = 0, free = true, title = 'TRAIT', detail = 'TEACH ONE UNIT', available = true }
+end
+
+local function make_draft_recruit(run, rng)
+  if #run:empty_slots() == 0 then
+    return nil
+  end
+  local is_rare = run.wave <= Constants.GROWTH_MAX_WAVE and rng:chance(0.35)
+  local pool = is_rare and Units.GROWTH_RECRUITS or Units.COMMON_RECRUITS
+  local class_id = pool[rng:int(1, #pool)]
+  local def = Units.ALLIES[class_id]
+  return {
+    kind = 'recruit',
+    class = class_id,
+    slot_kind = is_rare and 'rare' or 'common',
+    rarity = def.rarity or 'common',
+    price = 0,
+    free = true,
+    title = 'RECRUIT',
+    detail = 'PLACE A NEW UNIT',
+    available = true,
+  }
+end
+
+local function make_draft_gold(amount)
+  return {
+    kind = 'gold',
+    amount = amount or 6,
+    price = 0,
+    free = true,
+    title = 'BOUNTY',
+    detail = 'GAIN GOLD',
+    available = true,
+  }
+end
+
+function Camp.generate_draft_offers(run, fork_wave)
+  local fw = fork_wave or (run.wave - 1)
+  local act = math.max(1, math.ceil(fw / Constants.ACT_SIZE))
+  local _, fork_enc = run:fork_pair(fw)
+  local slots = (fork_enc and fork_enc.draft_slots) or { 'trait', 'relic', 'gold' }
+  local gold_amt = (fork_enc and fork_enc.draft_gold) or (act == 1 and 6 or (act == 2 and 7 or 9))
+  local rng = Rng.stream(run.seed, fw, 34)
+
+  local offers = {}
+  local used_modes = {}
+  local relic_exclude = act >= 3 and { bounty = true, field_rations = true } or nil
+
+  for _, kind in ipairs(slots) do
+    local card = nil
+    if kind == 'trait' then
+      card = make_draft_trait(run, rng, act)
+    elseif kind == 'relic' then
+      local tmp = {}
+      stock_equipment(run, rng, tmp, 'relic', Items.RELIC_ORDER, Items.RELICS, 1, {
+        free = true,
+        no_legendary = act == 1,
+        exclude = relic_exclude,
+      })
+      card = tmp[1]
+    elseif kind == 'recruit' then
+      card = make_draft_recruit(run, rng)
+    elseif kind == 'upgrade' then
+      card = make_draft_upgrade(run, rng, used_modes)
+    elseif kind == 'gold' then
+      card = make_draft_gold(gold_amt)
+    end
+
+    if not card then
+      card = make_draft_upgrade(run, rng, used_modes) or make_draft_gold(gold_amt)
+    end
+    offers[#offers + 1] = card
   end
 
   return offers
@@ -262,6 +440,9 @@ function Camp.can_buy(run, index, slot, to)
   if o.kind == 'upgrade' and o.mode ~= 'atk' and o.mode ~= 'hp' and o.mode ~= 'def' then
     return false, 'INVALID UPGRADE'
   end
+  if o.kind == 'gold' and (type(o.amount) ~= 'number' or o.amount <= 0) then
+    return false, 'INVALID OFFER'
+  end
 
   if o.kind == 'swap' then
     if not Util.valid_slot(slot) or not Util.valid_slot(to) or slot == to or not run.roster[slot] then
@@ -327,17 +508,25 @@ function Camp.apply_offer(run, index, slot, to)
     else
       run.inventory[slot] = o.id
     end
+  elseif o.kind == 'gold' then
+    run.gold = run.gold + (o.amount or 0)
   else
     return false, 'INVALID OFFER'
   end
 
   run.gold = run.gold - (o.price or 0)
   o.available = false
+  if run:is_draft() then
+    run.camp.picked = true
+    for _, other in ipairs(run:node_offers()) do
+      other.available = false
+    end
+  end
   return true
 end
 
 function Camp.item_targets(run, index)
-  if run.phase ~= 'camp' or type(index) ~= 'number' or index % 1 ~= 0 then
+  if run.phase ~= 'camp' or run:is_draft() or type(index) ~= 'number' or index % 1 ~= 0 then
     return {}
   end
   local def = Items.ACTIVES[run.inventory[index]]
@@ -354,7 +543,7 @@ function Camp.item_targets(run, index)
 end
 
 function Camp.can_use_item(run, index)
-  if run.phase ~= 'camp' then
+  if run.phase ~= 'camp' or run:is_draft() then
     return false, 'unavailable'
   end
   if type(index) ~= 'number' or index % 1 ~= 0 then
@@ -400,7 +589,7 @@ function Camp.use_item(run, index, target, expected_id)
 end
 
 function Camp.sell_value(run, kind, index)
-  if run.phase ~= 'camp' or (kind ~= 'relic' and kind ~= 'active') or type(index) ~= 'number' or index % 1 ~= 0 then
+  if run.phase ~= 'camp' or run:is_draft() or (kind ~= 'relic' and kind ~= 'active') or type(index) ~= 'number' or index % 1 ~= 0 then
     return nil
   end
   local list = kind == 'relic' and run.relics or run.inventory
@@ -431,7 +620,7 @@ function Camp.sell_gear(run, kind, index, expected_id)
 end
 
 function Camp.use_charge(run, action, slot, to)
-  if run.phase ~= 'camp' then
+  if run.phase ~= 'camp' or run:is_draft() then
     return false, 'unavailable'
   end
   if action == 'reroll' then

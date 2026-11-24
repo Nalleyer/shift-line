@@ -26,6 +26,7 @@ local CATEGORY_FRAMES = {
   active = { color = C.blue, pixels = { '..#', '.#.', '#..' } },
   relic = { color = C.green, pixels = { '##.', '##.', '...' } },
   trait = { color = C.purple, pixels = { '.#.', '###', '.#.' } },
+  gold = { color = C.amber, pixels = { '.#.', '#.#', '.#.' } },
 }
 
 local function tr(key, ...)
@@ -67,7 +68,17 @@ function Cards.is_rare_recruit(o)
     )
 end
 
-function Cards.offer_rects(offers)
+function Cards.offer_rects(offers, is_draft)
+  if is_draft then
+    local rects = {}
+    local n = math.max(1, #offers)
+    local margin, gap = 14, 8
+    local w = math.floor((T.W - 2 * margin - gap * (n - 1)) / n)
+    for i = 1, #offers do
+      rects[i] = { x = margin + (i - 1) * (w + gap), y = 74, w = w, h = 68 }
+    end
+    return rects
+  end
   local common_recs, rare_rec, services, stock = {}, nil, {}, {}
   local stock_widths, stock_total = {}, 0
   for i, offer in ipairs(offers) do
@@ -202,6 +213,56 @@ local function draw_recruit_card(o, r, mouse)
   local rlabel = is_rare and tr('rarity_rare') or tr('rarity_common')
   local stats_line = I18n.t('shop.recruit_stats', d.hp or 0, d.atk or 0, d.def or 0)
   Ui.tooltip.register(r, I18n.offer_title(o), { rlabel .. sep .. stats_line, I18n.unit_blurb({ kind = o.class, hp = d.hp }) })
+end
+
+function Cards.draw_draft_offer(o, r, mouse)
+  local def = Cards.is_gear(o) and Cards.gear_defs(o)[o.id]
+  local trait = o.kind == 'trait' and Traits.definitions[o.id]
+  local rarity = def or o.rarity
+  local rcol = (rarity and Ui.rarity_color(rarity))
+    or (o.kind == 'gold' and C.amber)
+    or (o.kind == 'upgrade' and C.blue)
+    or nil
+  local hot = o.available and Ui.hit(r, mouse.x, mouse.y)
+  local fill = C.shade
+  if rcol and o.available then
+    fill = Ui.mix(hot and C.panel or C.shade, rcol, hot and 0.16 or 0.08)
+  elseif hot then
+    fill = C.panel
+  end
+
+  Ui.rect(r.x, r.y, r.w, r.h, fill)
+  Cards.offer_frame(r, o.kind, o.available, hot)
+  if rcol then
+    Ui.rect(r.x + 1, r.y + 1, r.w - 2, 3, rcol, o.available and 0.92 or 0.25)
+    Ui.hline(r.x + 1, r.y + 4, r.w - 2, C.ink, 0.75)
+  end
+
+  local a = o.available and 1 or 0.35
+  local cx = r.x + r.w / 2
+  if o.kind == 'recruit' then
+    Ui.unit_shadow(cx, r.y + 27, 12, o.available and 0.45 or 0.2)
+    Ui.unit(o.class, cx, r.y + 17, 1, o.available and C.paper or C.dim, a)
+  elseif def then
+    Ui.equipment_icon(def, cx, r.y + 18, 1, a)
+  elseif trait then
+    Ui.icon(trait.icon, cx, r.y + 18, 1, C.amber, a)
+  elseif o.kind == 'gold' then
+    Ui.icon('coin', cx, r.y + 18, 1, C.amber, a)
+  elseif o.kind == 'upgrade' then
+    local ic = o.mode == 'atk' and 'attack' or (o.mode == 'hp' and 'heart' or 'guard')
+    Ui.icon(ic, cx, r.y + 18, 1, C.blue, a)
+  end
+
+  local title = Cards.offer_title(o)
+  local detail = I18n.offer_detail(o)
+  Text.fit_text(title, cx, r.y + 29, r.w - 10, { align = 'center', color = o.available and C.white or C.dim })
+  Text.wrap_text(detail, r.x + 6, r.y + 42, r.w - 12, {
+    color = o.available and C.paper or C.dim,
+    max_lines = 2,
+    line_h = Ui.cjk and 11 or 8,
+  })
+  Ui.tooltip.register(r, title, detail)
 end
 
 function Cards.draw_offer(o, r, mouse)

@@ -58,8 +58,11 @@ for w = 1, 15 do
   assert_eq(strong.phase, 'result', 'commit enters result phase')
   strong:after_result()
   if w == 3 then
-    assert_eq(strong.phase, 'battle', 'gauntlet choice skips camp after wave 3')
+    assert_eq(strong.phase, 'camp', 'gauntlet choice opens draft node after wave 3')
+    assert_true(strong:is_draft(), 'gauntlet node is a mixed 3-pick-1 draft')
+    assert_eq(#strong:node_offers(), 3, 'draft exposes 3 choices')
     assert_eq(strong.stats.forks_taken, 1, 'gauntlet increments forks_taken')
+    strong:finish_node()
   elseif w < 15 then
     assert_eq(strong.phase, 'camp', 'normal win opens camp')
     assert_eq(strong.camp.kind, 'camp', 'run.camp populated')
@@ -279,9 +282,27 @@ fuse_run:commit({
 fuse_run:after_result()
 assert_eq(fuse_run.core, Constants.FUSE_MIN_CORE, 'rewind raises low core up to FUSE_MIN_CORE (3)')
 
--- Boss victory refreshes spent fuse; boss defeat NEVER triggers fuse rewind
+-- Rewinding after taking bottom Elite branch stays on battle node (never opens skipped top Camp) & grants swap_kit
+local g_fuse = Run.new(123)
+g_fuse.wave = 9
+g_fuse.fork_choices[8] = 2
+g_fuse.core = 2
+g_fuse.inventory = { 'medkit' }
+g_fuse.fuse = 1
+g_fuse:finish_node()
+g_fuse:commit({
+  won = false, reason = 'core', core_damage = 2, core_after = 0,
+  gold_earned = 0, casualties = 0, enemy_escaped = 1, rounds = 1,
+  start_roster = g_fuse.roster, end_roster = g_fuse.roster,
+})
+g_fuse:after_result()
+assert_eq(g_fuse.phase, 'battle', 'bottom-branch fuse rewind stays in battle phase instead of opening skipped top Camp')
+assert_eq(g_fuse.core, Constants.FUSE_MIN_CORE, 'bottom-branch fuse rewind raises low core to FUSE_MIN_CORE')
+assert_eq(g_fuse.inventory[#g_fuse.inventory], 'swap_kit', 'bottom-branch fuse rewind grants swap_kit when bag has room')
+
+-- Act 1/2 boss defeat triggers Act Fuse rewind; final boss (wave 15) NEVER triggers fuse rewind
 fuse_run.wave = 5
-fuse_run.fuse = 0
+fuse_run.fuse = 1
 fuse_run.gold = 10
 fuse_run.committed_wave = nil
 local boss_lose = {
@@ -289,9 +310,23 @@ local boss_lose = {
   gold_earned = 0, casualties = 0, enemy_escaped = 0, rounds = 18,
   start_roster = fuse_run.roster, end_roster = fuse_run.roster,
 }
-fuse_run.fuse = 1
 local bl_sum = fuse_run:commit(boss_lose)
-assert_true(not bl_sum.fuse_triggered, 'boss defeat does NOT trigger fuse rewind')
+assert_true(bl_sum.fuse_triggered, 'Act 1 boss defeat triggers fuse rewind')
+assert_eq(fuse_run.fuse, 0, 'Act 1 boss fuse decremented 1->0')
+
+fuse_run.wave = 15
+fuse_run.fuse = 1
+fuse_run.committed_wave = nil
+fuse_run.pending_rewind = nil
+local final_lose = {
+  won = false, reason = 'overrun', core_damage = 0, core_after = 4,
+  gold_earned = 0, casualties = 0, enemy_escaped = 0, rounds = 18,
+  start_roster = fuse_run.roster, end_roster = fuse_run.roster,
+}
+local fl_sum = fuse_run:commit(final_lose)
+assert_true(not fl_sum.fuse_triggered, 'final boss (wave 15) defeat does NOT trigger fuse rewind')
+
+fuse_run.wave = 5
 fuse_run.committed_wave = nil
 fuse_run.pending_rewind = nil
 fuse_run.fuse = 0
@@ -312,5 +347,44 @@ local e_sum = eng_run:commit({
 })
 assert_eq(eng_run.core, 6, 'Engineer restores +1 Core after winning a wave')
 assert_eq(e_sum.bonus_core, 1, 'summary records +1 bonus_core from Engineer')
+
+-- 11. Mixed 3-pick-1 Gauntlet Draft & true relic rarity cap (capped commons/rares never inflate legendary navigator)
+local draft_run = Run.new(77)
+draft_run.wave = 4
+draft_run:open_draft(3)
+assert_true(draft_run:is_draft(), 'open_draft enters draft mode')
+assert_eq(#draft_run:node_offers(), 3, 'draft generates 3 offers')
+local gold_offer_idx
+for i, o in ipairs(draft_run:node_offers()) do
+  assert_eq(o.price, 0, 'draft offers are free')
+  if o.kind == 'gold' then gold_offer_idx = i end
+end
+if not gold_offer_idx then
+  draft_run.camp.offers[3] = { kind = 'gold', amount = 6, price = 0, free = true, available = true }
+  gold_offer_idx = 3
+end
+local gold_before = draft_run.gold
+assert_true(draft_run:apply_offer(gold_offer_idx), 'claiming gold draft offer succeeds')
+assert_eq(draft_run.gold, gold_before + draft_run.camp.offers[gold_offer_idx].amount, 'gold draft grants gold')
+for _, o in ipairs(draft_run:node_offers()) do
+  assert_true(not o.available, 'claiming 1 draft offer locks remaining draft offers')
+end
+
+local nav_hits = 0
+for s = 1, 200 do
+  local rr = Run.new(s)
+  rr.wave = 10
+  rr.relics = {
+    'whetstone', 'whetstone', 'padding', 'padding', 'field_rations',
+    'far_lens', 'compensation', 'compensation', 'bounty', 'insurance', 'insurance',
+  }
+  rr:open_camp(0, false)
+  for _, o in ipairs(rr:node_offers()) do
+    if o.kind == 'relic' and o.id == 'navigator' then
+      nav_hits = nav_hits + 1
+    end
+  end
+end
+assert_true(nav_hits < 25, 'legendary navigator stays truly rare even when all other relics are maxed (got ' .. nav_hits .. '/200)')
 
 print('progression_test.lua: ALL PASSED')

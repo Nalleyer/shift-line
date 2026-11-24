@@ -365,7 +365,7 @@ function Run:commit(result)
       end
       self.fuse = self.fuse_max or Constants.FUSE_MAX
     end
-  elseif self.wave > 1 and not is_boss and (self.fuse or 0) > 0 then
+  elseif self.wave > 1 and not self:is_last_wave() and (self.fuse or 0) > 0 then
     self.fuse = self.fuse - 1
     self.stats.fuses_used = (self.stats.fuses_used or 0) + 1
     self.pending_rewind = true
@@ -401,10 +401,21 @@ function Run:after_result()
     else
       self.core = math.max(math.min(Constants.FUSE_MIN_CORE, self.core_max), self.core)
     end
-    self.free_swaps = (self.free_swaps or 0) + 1
     self.committed_wave = nil
     self.battle_snapshot = nil
-    self:open_camp(0, false)
+    if self:is_gauntlet_wave() then
+      if #self.inventory < Constants.INVENTORY_MAX then
+        self.inventory[#self.inventory + 1] = 'swap_kit'
+      else
+        self.free_swaps = (self.free_swaps or 0) + 1
+      end
+      self.camp = nil
+      self.phase = 'battle'
+      self:save_battle_snapshot()
+    else
+      self.free_swaps = (self.free_swaps or 0) + 1
+      self:open_camp(0, false)
+    end
     return
   end
 
@@ -416,9 +427,7 @@ function Run:after_result()
     local prev_wave = self.wave
     self.wave = self.wave + 1
     if self:has_fork(prev_wave) and self:fork_choice(prev_wave) == 2 then
-      self.camp = nil
-      self.phase = 'battle'
-      self:save_battle_snapshot()
+      self:open_draft(prev_wave)
     else
       self:open_camp()
     end
@@ -431,12 +440,26 @@ function Run:finish_node()
   self.phase = 'battle'
 end
 
+function Run:is_draft()
+  return self.camp ~= nil and self.camp.kind == 'draft'
+end
+
 function Run:open_camp(reroll_count, swap_bought)
   self.phase = 'camp'
   self.camp = {
     kind = 'camp',
     reroll_count = reroll_count or 0,
     offers = Camp.generate_offers(self, reroll_count, swap_bought),
+  }
+end
+
+function Run:open_draft(fork_wave)
+  self.phase = 'camp'
+  self.camp = {
+    kind = 'draft',
+    fork_wave = fork_wave or (self.wave - 1),
+    picked = false,
+    offers = Camp.generate_draft_offers(self, fork_wave),
   }
 end
 

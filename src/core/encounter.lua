@@ -33,6 +33,7 @@ function Encounter.act_nodes(act)
       { col = 5, kind = 'battle', wave = 3, branch = 1, fork = true },
       { col = 5, kind = 'battle', wave = 3, branch = 2, fork = true, gauntlet = true },
       { col = 6, kind = 'camp', wave = 4, branch = 1 },
+      { col = 6, kind = 'draft', wave = 4, branch = 2 },
       { col = 7, kind = 'battle', wave = 4, branch = 1 },
       { col = 8, kind = 'camp', wave = 5 },
       { col = 9, kind = 'boss', wave = 5, branch = 1 },
@@ -47,6 +48,7 @@ function Encounter.act_nodes(act)
     { col = 6, kind = 'battle', wave = base + 3, branch = 1, fork = true },
     { col = 6, kind = 'battle', wave = base + 3, branch = 2, fork = true, gauntlet = true },
     { col = 7, kind = 'camp', wave = base + 4, branch = 1 },
+    { col = 7, kind = 'draft', wave = base + 4, branch = 2 },
     { col = 8, kind = 'battle', wave = base + 4, branch = 1 },
     { col = 9, kind = 'camp', wave = base + 5 },
     { col = 10, kind = 'boss', wave = base + 5, branch = 1 },
@@ -134,11 +136,29 @@ function Encounter.generate_encounters(seed)
   return out
 end
 
+local function roll_draft_slots(wave, rng)
+  local act = Encounter.act_of(wave)
+  if act == 1 then
+    local slot2 = rng:chance(0.65) and 'relic' or 'recruit'
+    local slot3 = rng:chance(0.60) and 'gold' or 'upgrade'
+    return { 'trait', slot2, slot3 }
+  elseif act == 2 then
+    local slot3 = rng:chance(0.55) and 'gold' or 'upgrade'
+    return { 'trait', 'relic', slot3 }
+  else
+    local slot2 = rng:chance(0.60) and 'relic' or 'upgrade'
+    local slot3 = slot2 == 'upgrade' and 'gold' or (rng:chance(0.55) and 'gold' or 'upgrade')
+    return { 'trait', slot2, slot3 }
+  end
+end
+
 function Encounter.generate_forks(seed)
   local out = {}
   for w, pool in pairs(Encounters.FORKS) do
     local rng = Rng.stream(seed, w, 4)
+    local draft_rng = Rng.stream(seed, w, 5)
     local enc = Util.deep_copy(rng:pick(pool))
+    enc.draft_slots = roll_draft_slots(w, draft_rng)
     out[w] = transform_encounter(enc, rng:chance(0.5), rng:int(0, 5), true)
   end
   return out

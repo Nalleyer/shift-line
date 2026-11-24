@@ -138,15 +138,23 @@ end
 
 function Views.draw_choose(screen, header_text_y, mouse)
   local run = screen.run
+  local is_draft = run:is_draft()
   draw_header_bar(run, header_text_y, mouse)
 
   local offers = run:node_offers()
-  local rects = Cards.offer_rects(offers)
-  for i, offer in ipairs(offers) do
-    Cards.draw_offer(offer, rects[i], mouse)
+  local rects = Cards.offer_rects(offers, is_draft)
+  if is_draft then
+    Text.fit_text(tr('draft_title'), T.W / 2, 55, T.W - 24, { align = 'center', color = C.amber })
+    for i, offer in ipairs(offers) do
+      Cards.draw_draft_offer(offer, rects[i], mouse)
+    end
+  else
+    for i, offer in ipairs(offers) do
+      Cards.draw_offer(offer, rects[i], mouse)
+    end
   end
 
-  Ui.hline(8, Cards.STOCK_Y - 5, T.W - 16, C.line, 0.8)
+  Ui.hline(8, is_draft and 150 or (Cards.STOCK_Y - 5), T.W - 16, C.line, 0.8)
   local highlights = {}
   if screen.drag then
     for i = 1, Constants.SLOTS do
@@ -161,6 +169,11 @@ function Views.draw_choose(screen, header_text_y, mouse)
   })
   if screen.drag and run.roster[screen.drag] then
     Ui.unit(run.roster[screen.drag], mouse.x, mouse.y, 2, C.amber, 0.8)
+  end
+
+  if is_draft then
+    Ui.button_rect(Views.LEAVE_BTN, tr('draft_skip'), { color = C.paper }, mouse)
+    return
   end
 
   Ui.button_rect(Views.SELL_BTN, tr('sell'), {}, mouse)
@@ -306,6 +319,8 @@ function Views.draw_confirm(screen, mouse)
   end
   if o.kind == 'trait' then
     Ui.icon(Traits.definitions[o.id].icon, 38, 59, 2, C.amber)
+  elseif o.kind == 'gold' then
+    Ui.icon('coin', 38, 59, 2, C.amber)
   end
   Text.fit_text(I18n.offer_title(o), T.W / 2, title_y, 272, { align = 'center', color = C.amber })
 
